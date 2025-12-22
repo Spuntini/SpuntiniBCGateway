@@ -1,0 +1,121 @@
+{
+  "schedules": [
+    {
+      "id": "biebuyck_test_daily_all_every_30min",
+      "company": "BIEBUYCK TEST",
+      "mode": "all",
+      "intervalMinutes": 0,
+      "enabled": false,
+      "startTime": "08:00",
+      "endTime": "18:00",
+      "repeatPattern": "minutes",
+      "repeatEveryHours": 0,
+      "weekdays": [],
+      "lastRan": "2025-12-22T15:29:37.4717976\u002B01:00",
+      "lastChecked": "2025-12-22T15:28:28.1355493\u002B01:00",
+      "repeatEveryMinutes": 30
+    },
+    {
+      "id": "biebuyck_production_once_item_cogs",
+      "company": "BIEBUYCK PRODUCTION",
+      "mode": "itemscogs",
+      "intervalMinutes": 0,
+      "enabled": true,
+      "startTime": "16:40",
+      "endTime": null,
+      "repeatPattern": "once",
+      "repeatEveryHours": 0,
+      "weekdays": [],
+      "lastRan": "2025-12-22T16:40:34.5895714\u002B01:00",
+      "lastChecked": "2025-12-22T16:40:32.9256726\u002B01:00",
+      "repeatEveryMinutes": 0
+    },
+    {
+      "id": "biebuyck_production_once_all",
+      "company": "BIEBUYCK PRODUCTION",
+      "mode": "all",
+      "intervalMinutes": 0,
+      "enabled": false,
+      "startTime": "23:50",
+      "endTime": null,
+      "repeatPattern": "once",
+      "repeatEveryHours": 0,
+      "weekdays": [],
+      "lastRan": "2025-12-22T14:02:36.7466418\u002B01:00",
+      "lastChecked": "2025-12-22T14:33:37.9604203\u002B01:00",
+      "repeatEveryMinutes": 0
+    },
+    {
+      "id": "biebuyck_production_daily_all",
+      "company": "BIEBUYCK PRODUCTION",
+      "mode": "all",
+      "intervalMinutes": 0,
+      "enabled": false,
+      "startTime": "23:50",
+      "endTime": null,
+      "repeatPattern": "daily",
+      "repeatEveryHours": 0,
+      "weekdays": [],
+      "lastRan": "2025-12-22T14:02:36.7466418\u002B01:00",
+      "lastChecked": "2025-12-22T14:33:37.9604203\u002B01:00",
+      "repeatEveryMinutes": 0
+    },
+    {
+      "id": "biebuyck_daily_items_23",
+      "company": "BIEBUYCK TEST",
+      "mode": "items",
+      "startTime": "23:00",
+      "repeatPattern": "daily",
+      "enabled": false
+    },
+    {
+      "id": "biebuyck_customers_business_hours",
+      "company": "BIEBUYCK TEST",
+      "mode": "customers",
+      "startTime": "09:00",
+      "endTime": "17:00",
+      "repeatPattern": "hourly",
+      "repeatEveryHours": 2,
+      "enabled": false
+    },
+    {
+      "id": "biebuyck_daytime_only_minutes",
+      "company": "BIEBUYCK TEST",
+      "mode": "items",
+      "startTime": "08:00",
+      "endTime": "18:00",
+      "repeatPattern": "minutes",
+      "repeatEveryMinutes": 30,
+      "enabled": false
+    },
+    {
+      "id": "bella_sicilia_weekly_monday",
+      "company": "BELLA SICILIA TEST",
+      "mode": "items",
+      "startTime": "10:30",
+      "repeatPattern": "weekly",
+      "weekdays": [
+        "Monday",
+        "Wednesday",
+        "Friday"
+      ],
+      "enabled": false
+    },
+    {
+      "id": "biebuyck_monthly_report",
+      "company": "BIEBUYCK TEST",
+      "mode": "all",
+      "startTime": "00:30",
+      "repeatPattern": "monthly",
+      "enabled": false
+    },
+    {
+      "id": "bella_sicilia_once_only",
+      "company": "BELLA SICILIA TEST",
+      "mode": "sales",
+      "startTime": "14:00",
+      "repeatPattern": "once",
+      "enabled": false
+    }
+  ]
+}

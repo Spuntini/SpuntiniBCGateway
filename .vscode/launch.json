@@ -1,0 +1,59 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "SpuntiniBCGateway: Console (Debug)",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "build C# project",
+            "program": "${workspaceFolder}/SpuntiniBCGateway/bin/Debug/net9.0/SpuntiniBCGateway.dll",
+            "args": ["--console"],
+            "cwd": "${workspaceFolder}/SpuntiniBCGateway",
+            "env": {
+                "ASPNETCORE_ENVIRONMENT": "Development"
+            }
+        },
+        {
+            "name": "SpuntiniBCGateway: Web (Kestrel Debug)",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "build C# project",
+            "program": "${workspaceFolder}/SpuntiniBCGateway/bin/Debug/net9.0/SpuntiniBCGateway.dll",
+            "args": [],
+            "cwd": "${workspaceFolder}/SpuntiniBCGateway",
+            "env": {
+                "ASPNETCORE_ENVIRONMENT": "Development",
+                "ASPNETCORE_URLS": "http://localhost:5000;https://localhost:5001"
+            }
+        },
+        {
+            "name": "SpuntiniBCGateway: Launch (Test)",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "build C# project (Test)",
+            "program": "${workspaceFolder}/SpuntiniBCGateway/bin/Test/net9.0/SpuntiniBCGateway.dll",
+            "args": [],
+            "cwd": "${workspaceFolder}/SpuntiniBCGateway",
+            "env": {
+                "ASPNETCORE_ENVIRONMENT": "Test",
+                "ASPNETCORE_URLS": "http://localhost:5002;https://localhost:5003"
+            }
+        },
+        {
+            "name": "SpuntiniBCGateway: Launch (Production)",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "build C# project (Release)",
+            "program": "${workspaceFolder}/SpuntiniBCGateway/bin/Release/net9.0/SpuntiniBCGateway.dll",
+            "args": [],
+            "cwd": "${workspaceFolder}/SpuntiniBCGateway",
+            "env": {
+                "ASPNETCORE_ENVIRONMENT": "Production",
+                "ASPNETCORE_URLS": "http://localhost:5100;https://localhost:5101"
+            }
+        }
+    ]
+}

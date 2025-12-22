@@ -1,0 +1,39 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "build C# project",
+			"type": "shell",
+			"command": "dotnet build",
+			"args": [],
+			"isBackground": false,
+			"problemMatcher": [
+				"$msCompile"
+			],
+			"group": "build"
+		},
+		{
+			"label": "build C# project (Test)",
+			"type": "shell",
+			"command": "dotnet build --configuration Test",
+			"args": [],
+			"isBackground": false,
+			"problemMatcher": [
+				"$msCompile"
+			],
+			"group": "build"
+		}
+		,
+		{
+			"label": "build C# project (Release)",
+			"type": "shell",
+			"command": "dotnet build --configuration Release",
+			"args": [],
+			"isBackground": false,
+			"problemMatcher": [
+				"$msCompile"
+			],
+			"group": "build"
+		}
+	]
+}
