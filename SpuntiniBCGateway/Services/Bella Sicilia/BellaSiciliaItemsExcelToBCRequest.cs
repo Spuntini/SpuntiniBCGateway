@@ -7,49 +7,40 @@ namespace SpuntiniBCGateway.Services;
 
 public static partial class BellaSiciliaItemsExcelToBCRequest
 {
-    public static async Task<Dictionary<string, Dictionary<string, string>>> GetItemsAsync(HttpClient client, IConfigurationRoot config, string? company = null, string filter = "", EventLog? logger = null, AuthHelper? authHelper = null, CancellationToken cancellationToken = default)
+    public static async Task<Dictionary<string, Dictionary<string, string>>> GetItemsAsync(HttpClient client, IConfigurationRoot config, string? company = null, string filter = "", string expand = "", EventLog? logger = null, AuthHelper? authHelper = null, CancellationToken cancellationToken = default)
     {
-        if(string.IsNullOrWhiteSpace(company) || !company.StartsWith("BELLA", StringComparison.OrdinalIgnoreCase))
+        if (string.IsNullOrWhiteSpace(company) || !company.StartsWith("BELLA", StringComparison.OrdinalIgnoreCase))
             ArgumentException.ThrowIfNullOrEmpty(company, "This method is only for company 'BELLA SICILIA'");
 
-        string itemUrl = config[$"Companies:{company}:ItemData:DestinationApiUrl"] ?? throw new ArgumentException($"Companies:{company}:ItemData:DestinationApiUrl required in config");
-        bool useDefaultDimensions = bool.TryParse(config[$"Companies:{company}:ItemData:UseDefaultDimensions"], out bool dimensions) ? dimensions : false;
-        
-        if (string.IsNullOrWhiteSpace(filter))
-            filter = config[$"Companies:{company}:ItemData:SelectAllFilter"] ?? "";
-
-        if (string.IsNullOrWhiteSpace(filter))
-            return await BcRequest.GetBcDataAsync(client, itemUrl + (useDefaultDimensions ? "?$expand=defaultDimensions,itemUnitOfMeasures" : "?$expand=itemUnitOfMeasures"), "no", EventLog.GetMethodName(), logger, company, authHelper, cancellationToken);
-
-        return await BcRequest.GetBcDataAsync(client, itemUrl + filter + (useDefaultDimensions ? "&$expand=defaultDimensions,itemUnitOfMeasures" : "&$expand=itemUnitOfMeasures"), "no", EventLog.GetMethodName(), logger, company, authHelper, cancellationToken);
+        return await ItemBCRequest.GetItemsAsync(client, config, company, filter, expand, logger, authHelper, cancellationToken);
     }
 
-    public static async Task<HttpResponseMessage?> GetItemAsync(HttpClient client, IConfigurationRoot config, string? company = null, string? itemCode = null, EventLog? logger = null, AuthHelper? authHelper = null, CancellationToken cancellationToken = default)
+    public static async Task<HttpResponseMessage?> GetItemAsync(HttpClient client, IConfigurationRoot config, string? company = null, List<string>? itemNumberList = null, EventLog? logger = null, AuthHelper? authHelper = null, CancellationToken cancellationToken = default)
     {
-        if(string.IsNullOrWhiteSpace(company) || !company.StartsWith("BELLA", StringComparison.OrdinalIgnoreCase))
+        if (string.IsNullOrWhiteSpace(company) || !company.StartsWith("BELLA", StringComparison.OrdinalIgnoreCase))
             ArgumentException.ThrowIfNullOrEmpty(company, "This method is only for company 'BELLA SICILIA'");
 
-        string json = ConvertExcelToItemJson(config, company, itemCode, logger).First();
+        string json = ConvertExcelToItemJson(config, company, itemNumberList, logger).First();
         return await ItemBCRequest.UpsertItemAsync(client, config, company, json, null, logger, authHelper, cancellationToken);
     }
 
     public static async Task<HttpResponseMessage?> SyncItemsAsync(HttpClient client, IConfigurationRoot config, string? company = null, Dictionary<string, Dictionary<string, string>>? allItemData = null, EventLog? logger = null, AuthHelper? authHelper = null, CancellationToken cancellationToken = default)
     {
-        if(string.IsNullOrWhiteSpace(company) || !company.StartsWith("BELLA", StringComparison.OrdinalIgnoreCase))
+        if (string.IsNullOrWhiteSpace(company) || !company.StartsWith("BELLA", StringComparison.OrdinalIgnoreCase))
             ArgumentException.ThrowIfNullOrEmpty(company, "This method is only for company 'BELLA SICILIA'");
 
         string json = ConvertExcelToItemJson(config, company, null, logger).First();
         return await ItemBCRequest.UpsertItemAsync(client, config, company, json, allItemData, logger, authHelper, cancellationToken);
     }
 
-    public static async Task<string> ProcessItemsAsync(HttpClient client, IConfigurationRoot config, string? company = null, Dictionary<string, Dictionary<string, string>>? allItemData = null, EventLog? logger = null, AuthHelper? authHelper = null, CancellationToken cancellationToken = default)
+    public static async Task<string> ProcessItemsAsync(HttpClient client, IConfigurationRoot config, string? company = null, List<string>? itemNumberList = null, Dictionary<string, Dictionary<string, string>>? allItemData = null, EventLog? logger = null, AuthHelper? authHelper = null, CancellationToken cancellationToken = default)
     {
-        if(string.IsNullOrWhiteSpace(company) || !company.StartsWith("BELLA", StringComparison.OrdinalIgnoreCase))
+        if (string.IsNullOrWhiteSpace(company) || !company.StartsWith("BELLA", StringComparison.OrdinalIgnoreCase))
             ArgumentException.ThrowIfNullOrEmpty(company, "This method is only for company 'BELLA SICILIA'");
 
         var stopwatchItems = Stopwatch.StartNew();
         if (logger != null) await logger.InfoAsync(EventLog.GetMethodName(), company, $"Start processing items for company '{company}'.");
-        foreach (string json in ConvertExcelToItemJson(config, company, null, logger))
+        foreach (string json in ConvertExcelToItemJson(config, company, itemNumberList, logger))
         {
             try
             {
@@ -68,14 +59,14 @@ public static partial class BellaSiciliaItemsExcelToBCRequest
 
     // Convert Excel rows to JSON request bodies suitable for Business Central items API.
     // Maps common columns from the provided sample Excel file to a minimal BC item payload.
-    public static IEnumerable<string> ConvertExcelToItemJson(IConfigurationRoot config, string? company = null, string? itemNumber = null, EventLog? logger = null)
+    public static IEnumerable<string> ConvertExcelToItemJson(IConfigurationRoot config, string? company = null, List<string>? itemNumberList = null, EventLog? logger = null)
     {
-        if(string.IsNullOrWhiteSpace(company) || !company.StartsWith("BELLA", StringComparison.OrdinalIgnoreCase))
+        if (string.IsNullOrWhiteSpace(company) || !company.StartsWith("BELLA", StringComparison.OrdinalIgnoreCase))
             ArgumentException.ThrowIfNullOrEmpty(company, "This method is only for company 'BELLA SICILIA'");
 
         string sourceType = config[$"Companies:{company}:ItemData:SourceType"] ?? "EXCEL";
 
-        if (!sourceType.Equals("EXCEL", StringComparison.OrdinalIgnoreCase))
+        if (!sourceType.Equals("XLSX", StringComparison.OrdinalIgnoreCase))
         {
             throw new NotSupportedException($"Source type '{sourceType}' is not supported for item data import.");
         }
@@ -92,23 +83,18 @@ public static partial class BellaSiciliaItemsExcelToBCRequest
         }
 
         string worksheetName = config[$"Companies:{company}:ItemData:WorksheetName"] ?? "Articles";
-        string itemNumberPrefix = config[$"Companies:{company}:ItemData:ItemNumberPrefix"] ?? "BS";
-        bool useDefaultDimensions = bool.TryParse(config[$"Companies:{company}:ItemData:UseDefaultDimension"], out bool dimensions) ? dimensions : false;
+        string cartonUom = config[$"Companies:{company}:ItemData:CartonUnitOfMeasureDefault"] ?? "KARTON";
+        bool useDefaultDimensions = bool.TryParse(config[$"Companies:{company}:ItemData:UseDefaultDimensions"], out bool dimensions) && dimensions;
 
-        var bcVatBusPostingGroupMapping = GetBcVatBusPostingGroupMapping(config);
+        var bcVatBusPostingGroupMapping = GetBcVatBusPostingGroupMapping(config, company);
 
         using var workbook = new XLWorkbook(excelPath);
-        
-        var worksheet = workbook.Worksheets.FirstOrDefault(w => w.Name.Equals(worksheetName, StringComparison.OrdinalIgnoreCase));
-        if (worksheet == null)
-        {
-            throw new Exception($"Worksheet '{worksheetName}' not found in Excel file.");
-        }
 
+        var worksheet = workbook.Worksheets.FirstOrDefault(w => w.Name.Equals(worksheetName, StringComparison.OrdinalIgnoreCase)) ?? throw new Exception($"Worksheet '{worksheetName}' not found in Excel file.");
         var rows = worksheet.RangeUsed().Rows().ToList();
         if (rows.Count == 0)
             yield break;
-
+        string? actualSkipped = null;
         // Get header row (first row)
         var headerRow = rows[0];
         var headers = headerRow.Cells()
@@ -124,49 +110,39 @@ public static partial class BellaSiciliaItemsExcelToBCRequest
             {
                 var row = rows[rowIndex];
 
-                if (TryGetCellValue(row, headers, "#IDCarPassActivity", out var process) && string.IsNullOrWhiteSpace(process))
+                if (!TryGetCellValue(row, headers, "#IDCarPassActivity", out var process))
                     continue;
-                
+
                 var item = new Dictionary<string, object>();
 
-                string? no = "";
                 // Get item code from the configured column
-                if (TryGetCellValue(row, headers, "IDArticle", out no) && !string.IsNullOrWhiteSpace(no))
+                if (TryGetCellValue(row, headers, "IDArticle", out string? no) && !string.IsNullOrWhiteSpace(no))
                 {
-                    no = itemNumberPrefix + no;
+                    no = BellaSiciliaHelper.GetBcItemNumberFromBellaSiciliaItemNumber(config, company, no);
                     item["no"] = no;
                     // MUST BE SPECIFIC ITEM NUMBER
-                    if (!string.IsNullOrWhiteSpace(itemNumber) && !no.Equals(itemNumber, StringComparison.InvariantCultureIgnoreCase))
+                    if (itemNumberList != null && itemNumberList.Count > 0 && !itemNumberList.Contains(no))
                         continue;
                 }
 
                 if (string.IsNullOrWhiteSpace(no))
-                {
-                    if (!string.IsNullOrWhiteSpace(itemNumber))
-                    {
-                        logger?.ErrorAsync(EventLog.GetMethodName(), company, new Exception($"Item {itemNumber} not found in file")).Wait();
-                    }
-                    else
-                    {
-                        logger?.WarningAsync(EventLog.GetMethodName(), company, $"Skipping malformed Excel row {rowIndex + 1}, no item code").Wait();
-                    }
-
                     continue;
-                }
+
+                // Avoid writing logs for each line from same order ==> slows the proces down. So always safe last skipped docNum.
+                if (!string.IsNullOrWhiteSpace(actualSkipped) && actualSkipped.Equals(no))
+                    continue;
+
+                actualSkipped = no;
 
                 if (TryGetCellValue(row, headers, "IsActive", out string? isActive) && !StringHelper.IsTrue(isActive))
                 {
-                    if (!string.IsNullOrWhiteSpace(itemNumber) && itemNumber.Equals(no, StringComparison.InvariantCultureIgnoreCase))
-                    {
-                        logger?.InfoAsync(EventLog.GetMethodName(), company, $"Item {itemNumber} is inactive in source file.").Wait();
-                    }
-                    else
+                    if (itemNumberList == null || itemNumberList.Count <= 0)
                     {
                         logger?.WarningAsync(EventLog.GetMethodName(), company, $"Skipping inactive item {no} at Excel row {rowIndex + 1}.").Wait();
                         continue;
                     }
                 }
-                
+
                 if (TryGetCellValue(row, headers, "TitleFr", out string? description) && !string.IsNullOrWhiteSpace(description))
                 {
                     item["description"] = StringHelper.CleanUpString(description.Trim());
@@ -177,54 +153,105 @@ public static partial class BellaSiciliaItemsExcelToBCRequest
                     continue;
                 }
 
-                string? salesUnitOfMeasureCode = "";
-                string? purchaseUnitOfMeasureCode = "";
-                string? tradeUnitOfMeasureCode = "";
+                string? baseUnitOfMeasureCode = config[$"Companies:{company}:ItemData:BasicUnitOfMeasureDefault"] ?? "STUKS";
+                item["baseUnitOfMeasure"] = baseUnitOfMeasureCode;
+                item["salesUnitOfMeasure"] = config[$"Companies:{company}:ItemData:SalesUnitOfMeasureDefault"] ?? baseUnitOfMeasureCode;
+                item["purchUnitOfMeasure"] = config[$"Companies:{company}:ItemData:PurchaseUnitOfMeasureDefault"] ?? baseUnitOfMeasureCode;
 
                 // unit of measure
-                if (TryGetCellValue(row, headers, "IDStorageUnit", out string? baseUnitOfMeasureCode) && !string.IsNullOrWhiteSpace(baseUnitOfMeasureCode))
-                {
-                    baseUnitOfMeasureCode = UomHelper.GetBcUom(company, baseUnitOfMeasureCode);
-                    salesUnitOfMeasureCode = baseUnitOfMeasureCode;
-                    purchaseUnitOfMeasureCode = baseUnitOfMeasureCode;
-                    tradeUnitOfMeasureCode = baseUnitOfMeasureCode;
-                }
-                if (string.IsNullOrWhiteSpace(baseUnitOfMeasureCode))
-                    baseUnitOfMeasureCode = config[$"Companies:{company}:ItemData:BasicUnitOfMeasureDefault"] ?? "STUKS";
-                if (string.IsNullOrWhiteSpace(salesUnitOfMeasureCode))
-                    salesUnitOfMeasureCode = config[$"Companies:{company}:ItemData:SalesUnitOfMeasureDefault"] ?? "STUKS";
-                if (string.IsNullOrWhiteSpace(purchaseUnitOfMeasureCode))
-                    purchaseUnitOfMeasureCode = config[$"Companies:{company}:ItemData:PurchaseUnitOfMeasureDefault"] ?? "STUKS";
-                if (string.IsNullOrWhiteSpace(tradeUnitOfMeasureCode))
-                    tradeUnitOfMeasureCode = config[$"Companies:{company}:ItemData:TradeUnitOfMeasureDefault"] ?? "STUKS";
+                if (TryGetCellValue(row, headers, "IDStorageUnit", out string? tradeUnitOfMeasureCode) && !string.IsNullOrWhiteSpace(tradeUnitOfMeasureCode))
+                    tradeUnitOfMeasureCode = UomHelper.GetBcUom(company, tradeUnitOfMeasureCode);
 
-                item["baseUnitOfMeasure"] = baseUnitOfMeasureCode;
-                item["salesUnitOfMeasure"] = salesUnitOfMeasureCode;
-                item["purchUnitOfMeasure"] = purchaseUnitOfMeasureCode;
+                if (string.IsNullOrWhiteSpace(tradeUnitOfMeasureCode))
+                    tradeUnitOfMeasureCode = config[$"Companies:{company}:ItemData:TradeUnitOfMeasureDefault"] ?? "STUK";
+
                 item["tradeUnitOfMeasure"] = tradeUnitOfMeasureCode;
 
-                // barcode / ean -> map to gtin if available
-                if (TryGetCellValue(row, headers, "EAN13", out string? barcode) && !string.IsNullOrWhiteSpace(barcode))
-                {
-                    string digits = System.Text.RegularExpressions.Regex.Replace(barcode, "[^0-9]", "");
-                    if (!string.IsNullOrWhiteSpace(digits))
-                        item["gtin"] = digits;
-                }
-                else if (TryGetCellValue(row, headers, "ean", out string? ean) && !string.IsNullOrWhiteSpace(ean))
-                {
-                    string digits = System.Text.RegularExpressions.Regex.Replace(ean, "[^0-9]", "");
-                    if (!string.IsNullOrWhiteSpace(digits))
-                        item["gtin"] = digits;
-                }                
-
                 // VAT
-                if (TryGetCellValue(row, headers, "sttel", out string? vatPercentage) && StringHelper.TryParseDouble(vatPercentage, CultureInfo.CurrentCulture, out double taxRate) && bcVatBusPostingGroupMapping.TryGetValue(taxRate, out string? bcTaxCode) && !string.IsNullOrWhiteSpace(bcTaxCode))
-                {
+                if (TryGetCellValue(row, headers, "IDVatRate", out string? vatPercentage) && StringHelper.TryParseDouble(vatPercentage, CultureInfo.CurrentCulture, out double taxRate) && bcVatBusPostingGroupMapping.TryGetValue(taxRate, out string? bcTaxCode) && !string.IsNullOrWhiteSpace(bcTaxCode))
                     item["vatProdPostingGroup"] = bcTaxCode;
-                }
-                else
+
+                double weightGram = 0d;
+
+                if (TryGetCellValue(row, headers, "Weight", out string? weightParameter) && !string.IsNullOrWhiteSpace(weightParameter) && double.TryParse(weightParameter.Replace(',', '.'), out var weight))
                 {
-                    item["vatProdPostingGroup"] = config[$"Companies:{company}:ItemData:VatBusPostingGroupDefault"] ?? "G1";
+                    if (weight > 0d) weightGram = weight * 1000;
+                }
+
+                // Uoms
+                var uomObjectList = new List<object>
+                {
+                    new Dictionary<string, object>
+                        {
+                            {"itemNo", no},
+                            {"code", baseUnitOfMeasureCode},
+                            {"qtyPerUnitOfMeasure", UomHelper.GetBcQtyPerUnitOfMeasure(company, baseUnitOfMeasureCode)},
+                            {"qtyRoundingPrecision", UomHelper.GetBcQtyRoundingPrecision(company, baseUnitOfMeasureCode)},
+                        }
+                };
+
+                if (!baseUnitOfMeasureCode.Equals(tradeUnitOfMeasureCode))
+                    uomObjectList.Add(new Dictionary<string, object>
+                        {
+                            {"itemNo", no},
+                            {"code", tradeUnitOfMeasureCode},
+                            {"qtyPerUnitOfMeasure", UomHelper.GetBcQtyPerUnitOfMeasure(company, tradeUnitOfMeasureCode)},
+                            {"qtyRoundingPrecision", UomHelper.GetBcQtyRoundingPrecision(company, tradeUnitOfMeasureCode)},
+                        });
+
+                var qtyBasePerCarton = 1;
+
+                if (TryGetCellValue(row, headers, "PackagingQuantity", out string? cartonQty) && !string.IsNullOrWhiteSpace(cartonQty) && int.TryParse(cartonQty, out qtyBasePerCarton) && qtyBasePerCarton > 1)
+                {
+                    uomObjectList.Add(new Dictionary<string, object>
+                        {
+                            {"itemNo", no},
+                            {"code", cartonUom},
+                            {"qtyPerUnitOfMeasure", qtyBasePerCarton},
+                            {"qtyRoundingPrecision", 0},
+                            {"weight", weightGram * qtyBasePerCarton},
+                        });
+                }
+
+                if (uomObjectList.Count > 0)
+                    item["itemUnitOfMeasures"] = uomObjectList;
+
+                // barcode / ean -> map to gtin if available
+                List<string> eanBarcodes = [];
+                var eanBarcodeList = new List<object>();
+
+                if (TryGetCellValue(row, headers, "EAN13", out string? barcode) && !string.IsNullOrWhiteSpace(barcode) && GtinValidator.IsValidGtin(barcode, out _) && !eanBarcodes.Contains(barcode))
+                {
+                    eanBarcodes.Add(barcode);
+
+                    eanBarcodeList.Add(new Dictionary<string, object>
+                            {
+                                {"itemNo", no},
+                                {"referenceType", ItemReferencesBCRequest.ReferenceType_BarCode},
+                                {"referenceNo", barcode},
+                                {"unitOfMeasure", tradeUnitOfMeasureCode}
+                            });
+                }
+
+                if (TryGetCellValue(row, headers, "EANCarton", out string? barcodeCart) && !string.IsNullOrWhiteSpace(barcodeCart) && GtinValidator.IsValidGtin(barcodeCart, out _) && !eanBarcodes.Contains(barcodeCart))
+                {
+                    eanBarcodes.Add(barcodeCart);
+
+                    var uom = qtyBasePerCarton > 1 ? cartonUom : tradeUnitOfMeasureCode;
+                    eanBarcodeList.Add(new Dictionary<string, object>
+                            {
+                                {"itemNo", no},
+                                {"referenceType", ItemReferencesBCRequest.ReferenceType_BarCode},
+                                {"referenceNo", barcodeCart},
+                                {"unitOfMeasure", uom}
+                            });
+                }
+
+                if (eanBarcodes.Count > 0)
+                {
+                    item["gtin"] = eanBarcodes[0];
+
+                    item["itemReferences"] = eanBarcodeList;
                 }
 
                 // DEFAULT VALUES BC
@@ -256,7 +283,7 @@ public static partial class BellaSiciliaItemsExcelToBCRequest
     private static bool TryGetCellValue(IXLRangeRow row, Dictionary<string, int> headers, string columnName, out string? value)
     {
         value = null;
-        
+
         if (!headers.TryGetValue(columnName, out int columnIndex))
             return false;
 
@@ -277,9 +304,9 @@ public static partial class BellaSiciliaItemsExcelToBCRequest
 
     public static Dictionary<double, string> GetBcVatBusPostingGroupMapping(IConfiguration config, string? company = null)
     {
-        if(string.IsNullOrWhiteSpace(company) || !company.StartsWith("BELLA", StringComparison.OrdinalIgnoreCase))
+        if (string.IsNullOrWhiteSpace(company) || !company.StartsWith("BELLA", StringComparison.OrdinalIgnoreCase))
             ArgumentException.ThrowIfNullOrEmpty(company, "This method is only for company 'BELLA SICILIA'");
-            
+
         ArgumentNullException.ThrowIfNull(config);
         string sectionPath = $"Companies:{company}:VatData:VatBusPostingGroupMapping";
         var vatDataSection = config.GetSection(sectionPath);

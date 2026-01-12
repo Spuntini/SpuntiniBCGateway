@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 
@@ -13,9 +14,9 @@ public static class BcRequest
         var stopwatch = Stopwatch.StartNew();
 
         try
-        {     
+        {
             if (logger != null) await logger.InfoAsync(EventLog.GetMethodName(), company, $"{sourceMethod} => GetBcDataAsync start").ConfigureAwait(false);
-            
+
             if (string.IsNullOrWhiteSpace(keyDefinition)) throw new ArgumentNullException("Key Definition is null");
 
             var result = new Dictionary<string, Dictionary<string, string>>(StringComparer.OrdinalIgnoreCase);
@@ -40,43 +41,9 @@ public static class BcRequest
                     using var respDoc = JsonDocument.Parse(content);
                     var root = respDoc.RootElement;
 
-                    // process 'value' array
-                    if (root.TryGetProperty("value", out var val) && val.ValueKind == JsonValueKind.Array)
-                    {
-                        foreach (var value in val.EnumerateArray())
-                        {
-                            string? resultKey = null;
-                            
-                            if (value.ValueKind == JsonValueKind.Object && value.TryGetProperty(keyDefinition, out JsonElement keyProp))
-                            {
-                                resultKey = keyProp.ValueKind == JsonValueKind.String ? keyProp.GetString() : keyProp.GetRawText();
-                            }
-
-                            if (string.IsNullOrWhiteSpace(resultKey)) continue;
-
-                            var tempResult = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-
-                            if (value.ValueKind == JsonValueKind.Object)
-                            {
-                                foreach (var prop in value.EnumerateObject())
-                                {
-                                    if (prop.Value.ValueKind == JsonValueKind.String)
-                                    {
-                                        string? tempVal = prop.Value.GetString();
-                                        if (string.IsNullOrWhiteSpace(tempVal)) tempVal = "";
-                                        tempResult[prop.Name] = tempVal;
-                                    }
-                                    else
-                                    {
-                                        tempResult[prop.Name] = prop.Value.GetRawText();
-                                    }
-                                }
-                            }
-
-                            // Add or overwrite existing key from previous pages
-                            result[resultKey] = tempResult;
-                        }
-                    }
+                    var tempResult = JsonHelper.GetDataFromJsonElement(root, keyDefinition);
+                    if (tempResult.Any())
+                        result = result.Concat(tempResult).ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
 
                     // check for @odata.nextLink for pagination
                     if (root.TryGetProperty("@odata.nextLink", out var nextProp) && nextProp.ValueKind == JsonValueKind.String)
@@ -105,24 +72,24 @@ public static class BcRequest
         finally
         {
             stopwatch.Stop();
-            if (logger != null) await logger.InfoAsync(EventLog.GetMethodName(), company, $"{sourceMethod} => GetBcDataAsync completed in {StringHelper.GetDurationString(stopwatch.Elapsed)}.").ConfigureAwait(false);            
+            if (logger != null) await logger.InfoAsync(EventLog.GetMethodName(), company, $"{sourceMethod} => GetBcDataAsync completed in {StringHelper.GetDurationString(stopwatch.Elapsed)}.").ConfigureAwait(false);
         }
     }
 
     public static async Task<HttpResponseMessage> PostBcDataAsync(HttpClient client, string postUrl, string json, string succesMessage = "Created successfully", string errorMessage = "Creation failed", string sourceMethod = "", EventLog? logger = null, string company = "", AuthHelper? authHelper = null, CancellationToken cancellationToken = default)
-    {       
+    {
         try
         {
             if (string.IsNullOrWhiteSpace(json))
-                return await SendAsync(client, new HttpRequestMessage(HttpMethod.Post, postUrl), succesMessage, errorMessage, $"{sourceMethod}: POST", logger, company, authHelper, cancellationToken); 
-            
+                return await SendAsync(client, new HttpRequestMessage(HttpMethod.Post, postUrl), succesMessage, errorMessage, $"{sourceMethod}: POST", logger, company, authHelper, cancellationToken);
+
             // Create: POST to collection
             using var request = new HttpRequestMessage(HttpMethod.Post, postUrl)
             {
                 Content = new StringContent(json, Encoding.UTF8, "application/json")
             };
 
-            return await SendAsync(client, request, succesMessage, errorMessage, $"{sourceMethod}: POST" , logger, company, authHelper, cancellationToken); 
+            return await SendAsync(client, request, succesMessage, errorMessage, $"{sourceMethod}: POST", logger, company, authHelper, cancellationToken);
         }
         catch (Exception ex)
         {
@@ -132,18 +99,18 @@ public static class BcRequest
     }
 
     public static async Task<HttpResponseMessage> PatchBcDataAsync(HttpClient client, string patchUrl, string? json, string etag, string succesMessage = "Patch successfully", string errorMessage = "Patch failed", string sourceMethod = "", EventLog? logger = null, string company = "", AuthHelper? authHelper = null, CancellationToken cancellationToken = default)
-    {       
+    {
         try
         {
             ArgumentException.ThrowIfNullOrEmpty(json);
-            
+
             using var request = new HttpRequestMessage(new HttpMethod("PATCH"), patchUrl)
             {
                 Content = new StringContent(json, Encoding.UTF8, "application/json"),
                 Headers = { { "If-Match", etag ?? "*" }, { "Prefer", "return=representation" } }
             };
 
-            return await SendAsync(client, request, succesMessage, errorMessage, $"{sourceMethod}: PATCH" , logger, company, authHelper, cancellationToken); 
+            return await SendAsync(client, request, succesMessage, errorMessage, $"{sourceMethod}: PATCH", logger, company, authHelper, cancellationToken);
         }
         catch (Exception ex)
         {
@@ -158,61 +125,190 @@ public static class BcRequest
         try
         {
             ArgumentException.ThrowIfNullOrEmpty(json);
-            
+
             using var request = new HttpRequestMessage(new HttpMethod("DELETE"), deleteUrl)
             {
                 Content = new StringContent(json, Encoding.UTF8, "application/json"),
                 Headers = { { "If-Match", etag ?? "*" }, { "Prefer", "return=representation" } }
             };
 
-            return await SendAsync(client, request, succesMessage, errorMessage, $"{sourceMethod}: DELETE" , logger, company, authHelper, cancellationToken);            
+            return await SendAsync(client, request, succesMessage, errorMessage, $"{sourceMethod}: DELETE", logger, company, authHelper, cancellationToken);
         }
         catch (Exception ex)
         {
             if (logger != null) await logger.ErrorAsync(EventLog.GetMethodName(), company, ex);
             return new HttpResponseMessage(System.Net.HttpStatusCode.InternalServerError) { ReasonPhrase = ex.Message };
         }
-    }   
+    }
 
-    private static async Task<HttpResponseMessage> SendAsync(HttpClient client, HttpRequestMessage request, string? succesMessage = null, 
+    public static async Task<HttpResponseMessage> AttachFile(HttpClient client, Attachment? attachment, string attachUrl,
+        string succesMessage = "Attach successfully", string errorMessage = "Attach failed", string sourceMethod = "", EventLog? logger = null, string company = "", AuthHelper? authHelper = null, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            if (attachment == null || attachment?.FileContent.Length == 0) return new HttpResponseMessage(System.Net.HttpStatusCode.OK);
+
+            // Create multipart form data for file upload
+            using var content = new MultipartFormDataContent();
+            var provider = new Microsoft.AspNetCore.StaticFiles.FileExtensionContentTypeProvider();
+            if (!provider.TryGetContentType(attachment!.FileName , out var contentType))
+            {
+                contentType = "application/octet-stream"; // Default content type
+            }
+
+            string[] tempFilePart = attachment.FileName.Split('.').ToArray();
+            var fileName = "";
+            var fileExtension = "";
+            
+            if ( tempFilePart == null || tempFilePart.Length == 0)
+            {
+                fileName = "attachment";
+                fileExtension = "";
+            }
+            else if (tempFilePart.Length == 1)
+            {
+                fileName = tempFilePart[0];
+                fileExtension = "";
+            }
+            else
+            {
+                fileExtension = tempFilePart[^1];
+                fileName = string.Join('.', tempFilePart, 0, tempFilePart.Length - 1);
+            }
+
+            var payLoad = new
+            {
+                fileName = fileName,
+                fileExtension = fileExtension,
+                attachmentContent = Convert.ToBase64String(attachment!.FileContent)
+            };
+
+            var jsonPayload = JsonSerializer.Serialize(payLoad);
+
+            using var request = new HttpRequestMessage(HttpMethod.Post, attachUrl)
+            {
+                Content = new StringContent(jsonPayload, Encoding.UTF8, "application/json")
+            };
+
+            return await SendAsync(client, request, succesMessage, errorMessage, $"{sourceMethod}: AttachFile", logger, company, authHelper, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            if (logger != null) await logger.ErrorAsync(EventLog.GetMethodName(), company, ex);
+            return new HttpResponseMessage(System.Net.HttpStatusCode.InternalServerError) { ReasonPhrase = ex.Message };
+        }
+    }
+
+    private static async Task<HttpResponseMessage> SendAsync(HttpClient client, HttpRequestMessage request, string? succesMessage = null,
         string errorMessage = "Error occured", string sourceMethod = "", EventLog? logger = null, string company = "", AuthHelper? authHelper = null, CancellationToken cancellationToken = default)
     {
         var stopwatch = Stopwatch.StartNew();
 
+        var maxRetryAttempts = 5;
+        var retryAttempts = 0;
+
         try
         {
-            HttpResponseMessage responseMessage = await client.SendAsync(request, cancellationToken).ConfigureAwait(false);
-
-            if (responseMessage.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+            while (true)
             {
-                if (authHelper != null)
+                // Clone the request for retries to avoid "request body already consumed" issues
+                HttpRequestMessage requestToSend = request;
+                if (retryAttempts > 0)
                 {
-                    string token = await authHelper.GetAccessTokenAsync(cancellationToken).ConfigureAwait(false);
-
-                    client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
-
-                    responseMessage = await client.SendAsync(request, cancellationToken).ConfigureAwait(false);
+                    requestToSend = await CloneRequestAsync(request).ConfigureAwait(false);
                 }
-            }
 
-            if (!responseMessage.IsSuccessStatusCode)
-            {
-                string content = await responseMessage.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
-                throw new Exception($"{sourceMethod} => {errorMessage} - StatusCode: {responseMessage.StatusCode}, Content: {content}");
-            }
+                HttpResponseMessage responseMessage = await client.SendAsync(requestToSend, cancellationToken).ConfigureAwait(false);
 
-            if (!string.IsNullOrWhiteSpace(succesMessage))
-            {
-                stopwatch.Stop();
-                if (logger != null) await logger.InfoAsync(EventLog.GetMethodName(), company, $"{sourceMethod} => {succesMessage} in {StringHelper.GetDurationString(stopwatch.Elapsed)}.");
+                if (responseMessage.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+                {
+                    if (authHelper != null)
+                    {
+                        string token = await authHelper.GetAccessTokenAsync(cancellationToken).ConfigureAwait(false);
+
+                        client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+
+                        // Clone request again for the retry after token refresh
+                        requestToSend = await CloneRequestAsync(request).ConfigureAwait(false);
+                        responseMessage = await client.SendAsync(requestToSend, cancellationToken).ConfigureAwait(false);
+                    }
+                }
+
+                if (responseMessage.StatusCode == System.Net.HttpStatusCode.Conflict  || 
+                    responseMessage.StatusCode == System.Net.HttpStatusCode.ServiceUnavailable)
+                {
+                    retryAttempts++;
+                    if (retryAttempts <= maxRetryAttempts)
+                    {
+                        if (logger != null) await logger.WarningAsync(EventLog.GetMethodName(), company, $"{sourceMethod} => Attempt {retryAttempts} received {responseMessage.StatusCode}. Retrying...").ConfigureAwait(false);
+                        await Task.Delay(1000 * retryAttempts, cancellationToken).ConfigureAwait(false); // Exponential backoff
+                        continue;
+                    }
+
+                    string content = await responseMessage.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+                    throw new Exception($"{sourceMethod} => {errorMessage} - StatusCode: {responseMessage.StatusCode}, Content: {content}");
+                }
+
+                if (!responseMessage.IsSuccessStatusCode)
+                {
+                    string content = await responseMessage.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+                    throw new Exception($"{sourceMethod} => {errorMessage} - StatusCode: {responseMessage.StatusCode}, Content: {content}");
+                }
+
+                if (!string.IsNullOrWhiteSpace(succesMessage))
+                {
+                    stopwatch.Stop();
+                    if (logger != null) await logger.InfoAsync(EventLog.GetMethodName(), company, $"{sourceMethod} => {succesMessage} in {StringHelper.GetDurationString(stopwatch.Elapsed)}.");
+                }
+
+                return responseMessage;
             }
-            
-            return responseMessage;
         }
         catch (Exception ex)
         {
             if (logger != null) await logger.ErrorAsync(EventLog.GetMethodName(), company, ex);
             return new HttpResponseMessage(System.Net.HttpStatusCode.InternalServerError) { ReasonPhrase = ex.Message };
         }
+    }
+
+    private static async Task<HttpRequestMessage> CloneRequestAsync(HttpRequestMessage request)
+    {
+        var clone = new HttpRequestMessage(request.Method, request.RequestUri)
+        {
+            Version = request.Version
+        };
+
+        // Copy headers
+        foreach (var header in request.Headers)
+        {
+            clone.Headers.TryAddWithoutValidation(header.Key, header.Value);
+        }
+
+        // Clone content if it exists
+        if (request.Content != null)
+        {
+            var ms = new MemoryStream();
+            await request.Content.CopyToAsync(ms).ConfigureAwait(false);
+            ms.Position = 0;
+
+            var streamContent = new StreamContent(ms);
+            if (request.Content.Headers.ContentType != null)
+            {
+                streamContent.Headers.ContentType = request.Content.Headers.ContentType;
+            }
+
+            // Copy other content headers
+            foreach (var header in request.Content.Headers)
+            {
+                if (header.Key != "Content-Type")
+                {
+                    streamContent.Headers.TryAddWithoutValidation(header.Key, header.Value);
+                }
+            }
+
+            clone.Content = streamContent;
+        }
+
+        return clone;
     }
 }

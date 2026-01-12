@@ -5,6 +5,29 @@ namespace SpuntiniBCGateway.Services;
 
 public static class CustomerBCRequest
 {   
+    public static async Task<Dictionary<string, Dictionary<string, string>>> GetCustomersAsync(HttpClient client, IConfigurationRoot config, string? company = null, string keyDefinition = "no", string? filter = null, EventLog? logger = null, AuthHelper? authHelper = null, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(client);
+        ArgumentNullException.ThrowIfNull(config);
+        ArgumentException.ThrowIfNullOrWhiteSpace(company);
+
+        string customerUrl = config[$"Companies:{company}:CustomerData:DestinationApiUrl"] ?? throw new ArgumentException($"Companies:{company}:CustomerData:DestinationApiUrl required in config");
+
+        if (string.IsNullOrWhiteSpace(filter))
+            filter = config[$"Companies:{company}:CustomerData:SelectAllFilter"] ?? "";
+
+        if (!string.IsNullOrWhiteSpace(filter))
+        {
+            if (!filter.Contains("$filter="))
+                filter = "?$filter=" + filter;
+            else if (!filter.StartsWith("?"))
+                filter = "?" + filter; 
+
+            customerUrl += filter;
+        }
+
+        return await BcRequest.GetBcDataAsync(client, customerUrl, keyDefinition, EventLog.GetMethodName(), logger, company, authHelper, cancellationToken);
+    }
 
     // Attempts to find a customer in Business Central by `number` or `vatRegistrationNumber`.
     // If found, performs a PATCH to update the customer; otherwise performs a POST to create it.
@@ -57,11 +80,12 @@ public static class CustomerBCRequest
             Dictionary<string, string>? customerResult = [];
             bool isPatchRequired = false;
 
+            HttpResponseMessage? httpResponseMessage = null; 
             if (!string.IsNullOrWhiteSpace(filter))
             {
                 if (allCustomerData == null || string.IsNullOrWhiteSpace(number) || !allCustomerData.TryGetValue(number, out customerResult))
                 {
-                    string getUrl = collectionUrl + "?$filter=" + Uri.EscapeDataString(filter);
+                    string getUrl = collectionUrl + "?$filter=" + filter;
 
                     customerResult = (await BcRequest.GetBcDataAsync(client, getUrl, "no", EventLog.GetMethodName(), logger, company, authHelper, cancellationToken)).FirstOrDefault().Value;
                 }
@@ -90,22 +114,43 @@ public static class CustomerBCRequest
 
                     customerJson = await JsonHelper.RemoveFieldsFromJsonAsync(customerJson, excludedFields, logger, company);
 
-                    return await BcRequest.PatchBcDataAsync(client, updateUrl, customerJson, etag ?? "*",
-                    $"Customer {number} updated successfully.", $"Failed to update customer {number}. Json: {customerJson}", EventLog.GetMethodName(), logger, company, authHelper, cancellationToken);
+                    httpResponseMessage = await BcRequest.PatchBcDataAsync(client, updateUrl, customerJson, etag ?? "*",
+                        $"Customer {number} updated successfully.", $"Failed to update customer {number}. Json: {customerJson}", EventLog.GetMethodName(), logger, company, authHelper, cancellationToken);
                 }
-
-                stopwatch.Stop();
-                if (logger != null) await logger.InfoAsync(EventLog.GetMethodName(), company, $"Duration: {StringHelper.GetDurationString(stopwatch.Elapsed)}. Customer {number} already exists. No update required.");
-                return new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+                else
                 {
-                    ReasonPhrase = $"Customer {number} already exists. No update required."
-                };
+                    stopwatch.Stop();
+                    if (logger != null) await logger.InfoAsync(EventLog.GetMethodName(), company, $"Duration: {StringHelper.GetDurationString(stopwatch.Elapsed)}. Customer {number} already exists. No update required.");
+                    return new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+                    {
+                        ReasonPhrase = $"Customer {number} already exists. No update required."
+                    };
+                }                
             }
             else
             {
-                return await BcRequest.PostBcDataAsync(client, collectionUrl, customerJson,
+                httpResponseMessage = await BcRequest.PostBcDataAsync(client, collectionUrl, customerJson,
                 $"Customer {number} created successfully.", $"Failed to create customer {number}. Json: {customerJson}", EventLog.GetMethodName(), logger, company, authHelper, cancellationToken);
             }
+
+            if (!string.IsNullOrWhiteSpace(filter))
+            {
+                string getUrl = collectionUrl + "?$filter=" + filter;
+
+                customerResult = (await BcRequest.GetBcDataAsync(client, getUrl, "no", EventLog.GetMethodName(), logger, company, authHelper, cancellationToken)).FirstOrDefault().Value;
+
+                if (customerResult != null && customerResult.TryGetValue("no", out number))
+                {
+                    allCustomerData ??= [];
+
+                    if(!allCustomerData.TryGetValue(number, out var x) || x is null)
+                        allCustomerData.TryAdd(number, customerResult);
+                    else
+                        allCustomerData[number] = customerResult;
+                }                
+            }
+
+            return httpResponseMessage;                    
         }
         catch (Exception ex)
         {

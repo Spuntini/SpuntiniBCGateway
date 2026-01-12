@@ -181,4 +181,67 @@ public class JsonHelper
         return root.ToJsonString(options);
     }
 
+    internal static Dictionary<string, Dictionary<string, string>> GetDataFromJsonString(string json, string keyDefinition)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(keyDefinition);
+        ArgumentException.ThrowIfNullOrWhiteSpace(json);
+
+        using var respDoc = JsonDocument.Parse(json);
+        var root = respDoc.RootElement;
+
+        return GetDataFromJsonElement(root, keyDefinition);
+    }
+
+    internal static Dictionary<string, Dictionary<string, string>> GetDataFromJsonElement(JsonElement jsonElement, string keyDefinition)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(keyDefinition);
+
+        var result = new Dictionary<string, Dictionary<string, string>>(StringComparer.OrdinalIgnoreCase);
+
+        JsonElement val;
+        if (jsonElement.ValueKind == JsonValueKind.Array)
+        {
+            val = jsonElement;
+        }
+        else if (!jsonElement.TryGetProperty("value", out val) || val.ValueKind != JsonValueKind.Array)
+        {
+            return result;
+        }
+
+        foreach (var value in val.EnumerateArray())
+        {
+            string? resultKey = null;
+
+            if (value.ValueKind == JsonValueKind.Object && value.TryGetProperty(keyDefinition, out JsonElement keyProp))
+            {
+                resultKey = keyProp.ValueKind == JsonValueKind.String ? keyProp.GetString() : keyProp.GetRawText();
+            }
+
+            if (string.IsNullOrWhiteSpace(resultKey)) continue;
+
+            var tempResult = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+            if (value.ValueKind == JsonValueKind.Object)
+            {
+                foreach (var prop in value.EnumerateObject())
+                {
+                    if (prop.Value.ValueKind == JsonValueKind.String)
+                    {
+                        string? tempVal = prop.Value.GetString();
+                        if (string.IsNullOrWhiteSpace(tempVal)) tempVal = "";
+                        tempResult[prop.Name] = tempVal;
+                    }
+                    else
+                    {
+                        tempResult[prop.Name] = prop.Value.GetRawText();
+                    }
+                }
+            }
+
+            // Add or overwrite existing key from previous pages
+            result[resultKey] = tempResult;
+        }
+
+        return result;
+    }
 }

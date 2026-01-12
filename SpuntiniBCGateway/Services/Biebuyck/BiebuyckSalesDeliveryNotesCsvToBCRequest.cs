@@ -19,12 +19,12 @@ public static class BiebuyckSalesDeliveryNotesCsvToBCRequest
         return await BcRequest.GetBcDataAsync(client, customerUrl, "number", EventLog.GetMethodName(), logger, company, authHelper, cancellationToken);
     }
 
-    public static async Task<HttpResponseMessage?> GetSalesOrderAsync(HttpClient client, IConfigurationRoot config, string? company = null, string? documentNumber = null, Dictionary<string, Dictionary<string, string>>? allItemData = null, Dictionary<string, Dictionary<string, string>>? allCustomerData = null, EventLog? logger = null, AuthHelper? authHelper = null, CancellationToken cancellationToken = default)
+    public static async Task<HttpResponseMessage?> GetSalesOrderListAsync(HttpClient client, IConfigurationRoot config, string? company = null, List<string>? documentNumberList = null, Dictionary<string, Dictionary<string, string>>? allItemData = null, Dictionary<string, Dictionary<string, string>>? allCustomerData = null, EventLog? logger = null, AuthHelper? authHelper = null, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(company) || !company.StartsWith("BIEBUYCK", StringComparison.OrdinalIgnoreCase))
             ArgumentException.ThrowIfNullOrEmpty(company, "This method is only for company 'BIEBUYCK'");
 
-        await foreach (string? json in ConvertCsvToSalesOrderJsonAsync(config, client, company, documentNumber, allItemData, allCustomerData, logger, authHelper, cancellationToken))
+        await foreach (string? json in ConvertCsvToSalesOrderJsonAsync(config, client, company, documentNumberList, allItemData, allCustomerData, logger, authHelper, cancellationToken))
             return await SalesOrderBCRequest.UpsertSalesOrderAsync(client, config, company, json, logger, authHelper, cancellationToken);
 
         return null;
@@ -40,7 +40,7 @@ public static class BiebuyckSalesDeliveryNotesCsvToBCRequest
         return null;
     }
 
-    public static async Task<string> ProcessSalesOrdersAsync(HttpClient client, IConfigurationRoot config, string? company = null, Dictionary<string, Dictionary<string, string>>? allItemData = null, Dictionary<string, Dictionary<string, string>>? allCustomerData = null, EventLog? logger = null, AuthHelper? authHelper = null, CancellationToken cancellationToken = default)
+    public static async Task<string> ProcessSalesOrdersAsync(HttpClient client, IConfigurationRoot config, string? company = null, List<string>? documentNumberList = null, Dictionary<string, Dictionary<string, string>>? allItemData = null, Dictionary<string, Dictionary<string, string>>? allCustomerData = null, EventLog? logger = null, AuthHelper? authHelper = null, CancellationToken cancellationToken = default)
     {
         var stopwatchSuppliers = Stopwatch.StartNew();
 
@@ -49,7 +49,7 @@ public static class BiebuyckSalesDeliveryNotesCsvToBCRequest
 
         if (logger != null) await logger.InfoAsync(EventLog.GetMethodName(), company, $"Start processing sales orders for company '{company}'.");
 
-        await foreach (string? json in ConvertCsvToSalesOrderJsonAsync(config, client, company, null, allItemData, allCustomerData, logger, authHelper, cancellationToken))
+        await foreach (string? json in ConvertCsvToSalesOrderJsonAsync(config, client, company, documentNumberList, allItemData, allCustomerData, logger, authHelper, cancellationToken))
         {
             try
             {
@@ -68,7 +68,7 @@ public static class BiebuyckSalesDeliveryNotesCsvToBCRequest
 
     // Parse CSV and group rows by 'nummer1' (column A).
     // For each group, extract header (columns A-F + P) and line details (columns G-O).
-    public static async IAsyncEnumerable<string?> ConvertCsvToSalesOrderJsonAsync(IConfigurationRoot config, HttpClient httpClient, string? company = null, string? documentNumber = null, Dictionary<string, Dictionary<string, string>>? allItemData = null, Dictionary<string, Dictionary<string, string>>? allCustomerData = null, EventLog? logger = null, AuthHelper? authHelper = null, [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    public static async IAsyncEnumerable<string?> ConvertCsvToSalesOrderJsonAsync(IConfigurationRoot config, HttpClient httpClient, string? company = null, List<string>? documentNumberList = null, Dictionary<string, Dictionary<string, string>>? allItemData = null, Dictionary<string, Dictionary<string, string>>? allCustomerData = null, EventLog? logger = null, AuthHelper? authHelper = null, [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(allItemData);
         ArgumentNullException.ThrowIfNull(allCustomerData);
@@ -117,6 +117,8 @@ public static class BiebuyckSalesDeliveryNotesCsvToBCRequest
         // Read all rows and group by 'nummer1'
         var groupedByDocument = new Dictionary<string, List<Dictionary<string, string>>>();
 
+        string? actualSkippedDocNum = null;
+
         string? line;
         while ((line = sr.ReadLine()) != null)
         {
@@ -130,35 +132,47 @@ public static class BiebuyckSalesDeliveryNotesCsvToBCRequest
                 // CHECK FIRST IF THE DOCUMENT IS WITHIN THE HORIZON OF THE LATEST X DAYS
                 if (DictionaryHelper.TryGet(map, "nummer1", out string? docNum) && !string.IsNullOrWhiteSpace(docNum))
                 {
-                    if (string.IsNullOrWhiteSpace(documentNumber) || !docNum.Equals(documentNumber))
-                    {
+                    // Avoid writing logs for each line from same order ==> slows the proces down. So always safe last skipped docNum.
+                    if (!string.IsNullOrWhiteSpace(actualSkippedDocNum) && actualSkippedDocNum.Equals(docNum))
+                        continue;                        
+
+                    if (documentNumberList == null || documentNumberList.Count <= 0)
+                    {      
                         if (DictionaryHelper.TryGet(map, "datum", out string? docDate) && !string.IsNullOrWhiteSpace(docDate))
                         {
                             var docDateDateTime = BiebuyckHelper.ParseToDateTime(docDate);
                             if (DateTime.TryParse(firstDayToProces, out var firstDay) && firstDay > docDateDateTime)
                             {
+                                actualSkippedDocNum = docNum;
                                 if (logger != null) await logger.InfoAsync(EventLog.GetMethodName(), company, $"Skipping CSV line, {docNum} with docdate {docDate} is before first day to process {firstDayToProces}");
                                 continue;
                             }
 
                             if (docDateDateTime is not null && docDateDateTime <= DateTime.Now.AddDays(-processHorizonLastXDays))
                             {
+                                actualSkippedDocNum = docNum;
                                 if (logger != null) await logger.InfoAsync(EventLog.GetMethodName(), company, $"Skipping CSV line, {docNum} with docdate {docDate} is not within the horizon scope of last {processHorizonLastXDays} days");
                                 continue;
                             }
 
-
                             if (docDateDateTime is not null && docDateDateTime <= DateTime.Now.AddDays(-processHorizonLastXDays))
                             {
+                                actualSkippedDocNum = docNum;
                                 if (logger != null) await logger.InfoAsync(EventLog.GetMethodName(), company, $"Skipping CSV line, {docNum} with docdate {docDate} is not within the horizon scope of last {processHorizonLastXDays} days");
                                 continue;
                             }
                         }
                         else
                         {
+                            actualSkippedDocNum = docNum;
                             if (logger != null) await logger.WarningAsync(EventLog.GetMethodName(), company, $"Skipping malformed CSV line, no docdate");
                             continue;
                         }
+                    }
+                    else if (!documentNumberList.Contains(docNum))
+                    {
+                        actualSkippedDocNum = docNum;
+                        continue;
                     }
 
                     if (!groupedByDocument.ContainsKey(docNum))
@@ -209,7 +223,7 @@ public static class BiebuyckSalesDeliveryNotesCsvToBCRequest
                 {
                     if (logger != null) await logger.InfoAsync(EventLog.GetMethodName(), company, $"Customer {customerNumber} not found in cache, retrieving from Biebuyck file.");
 
-                    await BiebuyckCustomerCsvToBCRequest.GetCustomerAsync(httpClient, config, company, customerNumber, logger, authHelper, cancellationToken);
+                    await BiebuyckCustomerCsvToBCRequest.GetCustomerListAsync(httpClient, config, company, [customerNumber], logger, authHelper, cancellationToken);
 
                     var customerTempData = await BiebuyckCustomerCsvToBCRequest.GetCustomersAsync(httpClient, config, company, $"no eq '{customerNumber}'", logger, authHelper, cancellationToken);
 
@@ -305,7 +319,7 @@ public static class BiebuyckSalesDeliveryNotesCsvToBCRequest
                         {
                             if (!lineObjectNumber.StartsWith("A", StringComparison.InvariantCultureIgnoreCase))
                             {
-                                await BiebuyckItemsCsvToBCRequest.GetItemAsync(httpClient, config, company, lineObjectNumber, logger, authHelper, cancellationToken);
+                                await BiebuyckItemsCsvToBCRequest.GetItemListAsync(httpClient, config, company, [lineObjectNumber], logger, authHelper, cancellationToken);
                             }
 
                             string escaped = lineObjectNumber.Replace("'", "''");
@@ -313,7 +327,7 @@ public static class BiebuyckSalesDeliveryNotesCsvToBCRequest
 
                             string collectionUrl = config[$"Companies:{company}:ItemData:DestinationApiUrl"] ?? throw new ArgumentException($"Companies:{company}:ItemData:DestinationApiUrl required in config");
 
-                            string getUrl = collectionUrl + "?$filter=" + Uri.EscapeDataString(filter) + "&$expand=itemUnitOfMeasures";
+                            string getUrl = collectionUrl + "?$filter=" + filter + "&$expand=itemUnitOfMeasures";
                             itemData = (await BcRequest.GetBcDataAsync(httpClient, getUrl, "no", EventLog.GetMethodName(), logger, company, authHelper, cancellationToken)).FirstOrDefault().Value;
 
                             allItemData[lineObjectNumber] = itemData;
@@ -370,7 +384,7 @@ public static class BiebuyckSalesDeliveryNotesCsvToBCRequest
 
                         if (!string.IsNullOrWhiteSpace(bcUom) && !bcUom.Equals(itemData["tradeUnitOfMeasure"], StringComparison.InvariantCultureIgnoreCase))
                         {
-                            await ItemUnitOfMeasureBCRequest.AddItemUnitOfMeasureAsync(httpClient, config, company, itemData, new List<string> { bcUom }, logger, authHelper, cancellationToken).ConfigureAwait(false);
+                            await ItemUnitOfMeasureBCRequest.AddItemUnitOfMeasureAsync(httpClient, config, company, itemData, new Dictionary<string, int> {{ bcUom, UomHelper.GetBcQtyPerUnitOfMeasure(company, bcUom) }}, logger, authHelper, cancellationToken).ConfigureAwait(false);
 
                             documentLine["unitOfMeasureCode"] = bcUom;
                         }

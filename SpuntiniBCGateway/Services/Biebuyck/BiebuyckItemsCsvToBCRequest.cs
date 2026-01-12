@@ -7,49 +7,40 @@ namespace SpuntiniBCGateway.Services;
 
 public static partial class BiebuyckItemsCsvToBCRequest
 {
-    public static async Task<Dictionary<string, Dictionary<string, string>>> GetItemsAsync(HttpClient client, IConfigurationRoot config, string? company = null, string filter = "", EventLog? logger = null, AuthHelper? authHelper = null, CancellationToken cancellationToken = default)
+    public static async Task<Dictionary<string, Dictionary<string, string>>> GetItemsAsync(HttpClient client, IConfigurationRoot config, string? company = null, string filter = "", string expand = "", EventLog? logger = null, AuthHelper? authHelper = null, CancellationToken cancellationToken = default)
     {
-        if(string.IsNullOrWhiteSpace(company) || !company.StartsWith("BIEBUYCK", StringComparison.OrdinalIgnoreCase))
+        if (string.IsNullOrWhiteSpace(company) || !company.StartsWith("BIEBUYCK", StringComparison.OrdinalIgnoreCase))
             ArgumentException.ThrowIfNullOrEmpty(company, "This method is only for company 'BIEBUYCK'");
 
-        string itemUrl = config[$"Companies:{company}:ItemData:DestinationApiUrl"] ?? throw new ArgumentException($"Companies:{company}:ItemData:DestinationApiUrl required in config");
-        bool useDefaultDimensions = bool.TryParse(config[$"Companies:{company}:ItemData:UseDefaultDimensions"], out bool dimensions) ? dimensions : false;
-        
-        if (string.IsNullOrWhiteSpace(filter))
-            filter = config[$"Companies:{company}:ItemData:SelectAllFilter"] ?? "";
-
-        if (string.IsNullOrWhiteSpace(filter))
-            return await BcRequest.GetBcDataAsync(client, itemUrl + (useDefaultDimensions ? "?$expand=defaultDimensions,itemUnitOfMeasures" : "?$expand=itemUnitOfMeasures"), "no", EventLog.GetMethodName(), logger, company, authHelper, cancellationToken);
-
-        return await BcRequest.GetBcDataAsync(client, itemUrl + filter + (useDefaultDimensions ? "&$expand=defaultDimensions,itemUnitOfMeasures" : "&$expand=itemUnitOfMeasures"), "no", EventLog.GetMethodName(), logger, company, authHelper, cancellationToken);
+        return await ItemBCRequest.GetItemsAsync(client, config, company, filter, expand, logger, authHelper, cancellationToken);
     }
 
-    public static async Task<HttpResponseMessage?> GetItemAsync(HttpClient client, IConfigurationRoot config, string? company = null, string? itemCode = null, EventLog? logger = null, AuthHelper? authHelper = null, CancellationToken cancellationToken = default)
+    public static async Task<HttpResponseMessage?> GetItemListAsync(HttpClient client, IConfigurationRoot config, string? company = null, List<string>? itemNumberList = null, EventLog? logger = null, AuthHelper? authHelper = null, CancellationToken cancellationToken = default)
     {
-        if(string.IsNullOrWhiteSpace(company) || !company.StartsWith("BIEBUYCK", StringComparison.OrdinalIgnoreCase))
+        if (string.IsNullOrWhiteSpace(company) || !company.StartsWith("BIEBUYCK", StringComparison.OrdinalIgnoreCase))
             ArgumentException.ThrowIfNullOrEmpty(company, "This method is only for company 'BIEBUYCK'");
 
-        string json = ConvertCsvToItemJson(config, company, itemCode, logger).First();
+        string json = ConvertCsvToItemJson(config, company, itemNumberList, logger).First();
         return await ItemBCRequest.UpsertItemAsync(client, config, company, json, null, logger, authHelper, cancellationToken);
     }
 
     public static async Task<HttpResponseMessage?> SyncItemsAsync(HttpClient client, IConfigurationRoot config, string company, Dictionary<string, Dictionary<string, string>>? allItemData = null, EventLog? logger = null, AuthHelper? authHelper = null, CancellationToken cancellationToken = default)
     {
-        if(string.IsNullOrWhiteSpace(company) || !company.StartsWith("BIEBUYCK", StringComparison.OrdinalIgnoreCase))
+        if (string.IsNullOrWhiteSpace(company) || !company.StartsWith("BIEBUYCK", StringComparison.OrdinalIgnoreCase))
             ArgumentException.ThrowIfNullOrEmpty(company, "This method is only for company 'BIEBUYCK'");
 
         string json = ConvertCsvToItemJson(config, company, null, logger).First();
         return await ItemBCRequest.UpsertItemAsync(client, config, company, json, allItemData, logger, authHelper, cancellationToken);
     }
 
-    public static async Task<string> ProcessItemsAsync(HttpClient client, IConfigurationRoot config, string? company = null, Dictionary<string, Dictionary<string, string>>? allItemData = null, EventLog? logger = null, AuthHelper? authHelper = null, CancellationToken cancellationToken = default)
+    public static async Task<string> ProcessItemsAsync(HttpClient client, IConfigurationRoot config, string? company = null, List<string>? itemNumberList = null, Dictionary<string, Dictionary<string, string>>? allItemData = null, EventLog? logger = null, AuthHelper? authHelper = null, CancellationToken cancellationToken = default)
     {
-        if(string.IsNullOrWhiteSpace(company) || !company.StartsWith("BIEBUYCK", StringComparison.OrdinalIgnoreCase))
+        if (string.IsNullOrWhiteSpace(company) || !company.StartsWith("BIEBUYCK", StringComparison.OrdinalIgnoreCase))
             ArgumentException.ThrowIfNullOrEmpty(company, "This method is only for company 'BIEBUYCK'");
 
         var stopwatchSuppliers = Stopwatch.StartNew();
         if (logger != null) await logger.InfoAsync(EventLog.GetMethodName(), company, $"Start processing items for company '{company}'.");
-        foreach (string json in ConvertCsvToItemJson(config, company, null, logger))
+        foreach (string json in ConvertCsvToItemJson(config, company, itemNumberList, logger))
         {
             try
             {
@@ -68,9 +59,9 @@ public static partial class BiebuyckItemsCsvToBCRequest
 
     // Convert CSV rows to JSON request bodies suitable for Business Central items API.
     // Maps common columns from the provided sample CSV to a minimal BC item payload.
-    public static IEnumerable<string> ConvertCsvToItemJson(IConfigurationRoot config, string? company = null, string? itemNumber = null, EventLog? logger = null)
+    public static IEnumerable<string> ConvertCsvToItemJson(IConfigurationRoot config, string? company = null, List<string>? itemNumberList = null, EventLog? logger = null)
     {
-        if(string.IsNullOrWhiteSpace(company) || !company.StartsWith("BIEBUYCK", StringComparison.OrdinalIgnoreCase))
+        if (string.IsNullOrWhiteSpace(company) || !company.StartsWith("BIEBUYCK", StringComparison.OrdinalIgnoreCase))
             ArgumentException.ThrowIfNullOrEmpty(company, "This method is only for company 'BIEBUYCK'");
 
         string sourceType = config[$"Companies:{company}:ItemData:SourceType"] ?? "CSV";
@@ -95,17 +86,19 @@ public static partial class BiebuyckItemsCsvToBCRequest
         string csvDelimiter = config[$"Companies:{company}:ItemData:Delimiter"] ?? ",";
         string encodingName = config[$"Companies:{company}:ItemData:SourceEncoding"] ?? "UTF8";
         string itemNumberPrefix = config[$"Companies:{company}:ItemData:ItemNumberPrefix"] ?? "BI";
-        bool useDefaultDimensions = bool.TryParse(config[$"Companies:{company}:ItemData:UseDefaultDimension"], out bool dimensions) ? dimensions : false;
+        bool useDefaultDimensions = bool.TryParse(config[$"Companies:{company}:ItemData:UseDefaultDimensions"], out bool dimensions) ? dimensions : false;
 
-        var bcVatBusPostingGroupMapping = GetBcVatBusPostingGroupMapping(config, company);
+        var bcVatBusPostingGroupMapping = BiebuyckHelper.GetBcVatBusPostingGroupMapping(config, company);
 
         Encoding encoding = StringHelper.GetEncoding(encodingName);
-        List<string> unknowItemList = [];
 
         using var sr = new StreamReader(csvPath, encoding);
         string? headerLine = sr.ReadLine();
         if (headerLine == null)
             yield break;
+
+
+        string? actualSkipped = null;
 
         if (encoding != Encoding.UTF8)
             headerLine = Encoding.UTF8.GetString(Encoding.Convert(encoding, Encoding.UTF8, encoding.GetBytes(headerLine)));
@@ -125,43 +118,29 @@ public static partial class BiebuyckItemsCsvToBCRequest
 
                 var item = new Dictionary<string, object>();
 
-                string? no = "";
                 // 'kode' appears to be the product code used in the CSV -> map to 'no'
-                if (DictionaryHelper.TryGet(map, "kode", out no) && !string.IsNullOrWhiteSpace(no))
+                if (DictionaryHelper.TryGet(map, "kode", out string? no))
                 {
                     no = itemNumberPrefix + no;
                     item["no"] = no;
                     // MUST BE SPECIFIC ITEM NUMBER
-                    if (!string.IsNullOrWhiteSpace(itemNumber) && !no.Equals(itemNumber, StringComparison.InvariantCultureIgnoreCase))
+                    if (itemNumberList != null && itemNumberList.Count > 0 && !itemNumberList.Contains(no))
                         continue;
                 }
 
                 if (string.IsNullOrWhiteSpace(no))
-                {
-                    if (!string.IsNullOrWhiteSpace(itemNumber))
-                    {
-                        if (unknowItemList.Contains(itemNumber))
-                        {
-                            logger?.WarningAsync(EventLog.GetMethodName(), company, $"Item {itemNumber} not found in file, but already flagged").Wait();
-                            continue;
-                        }
-
-                        unknowItemList.Add(itemNumber);
-
-                        logger?.ErrorAsync(EventLog.GetMethodName(), company, new Exception($"Item {itemNumber} not found in file")).Wait();
-                    }
-                    else
-                    {
-                        logger?.WarningAsync(EventLog.GetMethodName(), company, $"Skipping malformed CSV line, no item code {line}").Wait();
-                    }
-
                     continue;
-                }
+
+                // Avoid writing logs for each line from same order ==> slows the proces down. So always safe last skipped docNum.
+                if (!string.IsNullOrWhiteSpace(actualSkipped) && actualSkipped.Equals(no))
+                    continue;
+
+                actualSkipped = no;
 
                 // displayName / description
                 if (DictionaryHelper.TryGet(map, "omschr", out string? description) && !string.IsNullOrWhiteSpace(description))
                 {
-                    if (string.IsNullOrWhiteSpace(itemNumber))
+                    if (itemNumberList == null || itemNumberList.Count <= 0)
                     {
                         description = description.Trim();
 
@@ -201,50 +180,91 @@ public static partial class BiebuyckItemsCsvToBCRequest
                     continue;
                 }
 
-                string? salesUnitOfMeasureCode = "";
-                string? purchaseUnitOfMeasureCode = "";
-                string? tradeUnitOfMeasureCode = "";
+                string? baseUnitOfMeasureCode = config[$"Companies:{company}:ItemData:BasicUnitOfMeasureDefault"] ?? "STUKS";
+                item["baseUnitOfMeasure"] = baseUnitOfMeasureCode;
+                item["salesUnitOfMeasure"] = config[$"Companies:{company}:ItemData:SalesUnitOfMeasureDefault"] ?? baseUnitOfMeasureCode;
+                item["purchUnitOfMeasure"] =  config[$"Companies:{company}:ItemData:PurchaseUnitOfMeasureDefault"] ?? baseUnitOfMeasureCode;
 
                 // unit of measure
-                if (DictionaryHelper.TryGet(map, "eenheid", out string? baseUnitOfMeasureCode) && !string.IsNullOrWhiteSpace(baseUnitOfMeasureCode))
-                {
-                    baseUnitOfMeasureCode = UomHelper.GetBcUom(company, baseUnitOfMeasureCode);
-                    salesUnitOfMeasureCode = baseUnitOfMeasureCode;
-                    purchaseUnitOfMeasureCode = baseUnitOfMeasureCode;
-                    tradeUnitOfMeasureCode = baseUnitOfMeasureCode;
-                }
-                if (string.IsNullOrWhiteSpace(baseUnitOfMeasureCode))
-                    baseUnitOfMeasureCode = config[$"Companies:{company}:ItemData:BasicUnitOfMeasureDefault"] ?? "STUKS";
-                if (string.IsNullOrWhiteSpace(salesUnitOfMeasureCode))
-                    salesUnitOfMeasureCode = config[$"Companies:{company}:ItemData:SalesUnitOfMeasureDefault"] ?? "STUKS";
-                if (string.IsNullOrWhiteSpace(purchaseUnitOfMeasureCode))
-                    purchaseUnitOfMeasureCode = config[$"Companies:{company}:ItemData:PurchaseUnitOfMeasureDefault"] ?? "STUKS";
-                if (string.IsNullOrWhiteSpace(tradeUnitOfMeasureCode))
-                    tradeUnitOfMeasureCode = config[$"Companies:{company}:ItemData:TradeUnitOfMeasureDefault"] ?? "STUKS";
+                if (DictionaryHelper.TryGet(map, "eenheid", out string? tradeUnitOfMeasureCode) && !string.IsNullOrWhiteSpace(tradeUnitOfMeasureCode))
+                    tradeUnitOfMeasureCode = UomHelper.GetBcUom(company, tradeUnitOfMeasureCode);                   
 
-                item["baseUnitOfMeasure"] = baseUnitOfMeasureCode;
-                item["salesUnitOfMeasure"] = salesUnitOfMeasureCode;
-                item["purchUnitOfMeasure"] = purchaseUnitOfMeasureCode;
+                if (string.IsNullOrWhiteSpace(tradeUnitOfMeasureCode))
+                    tradeUnitOfMeasureCode = config[$"Companies:{company}:ItemData:TradeUnitOfMeasureDefault"] ?? "STUK";
+
                 item["tradeUnitOfMeasure"] = tradeUnitOfMeasureCode;
 
-                // barcode / ean -> map to gtin if available
-                if (DictionaryHelper.TryGet(map, "barcode", out string? barcode) && !string.IsNullOrWhiteSpace(barcode))
+                // Uoms
+                var uomObjectList = new List<object>
                 {
-                    // sanitize non-digits
-                    string digits = BiebuyckHelper.MyRegex().Replace(barcode, "");
-                    if (!string.IsNullOrWhiteSpace(digits))
-                        item["gtin"] = digits;
-                }
-                else if (DictionaryHelper.TryGet(map, "ean", out string? ean) && !string.IsNullOrWhiteSpace(ean))
-                {
-                    string digits = BiebuyckHelper.MyRegex().Replace(ean, "");
-                    if (!string.IsNullOrWhiteSpace(digits))
-                        item["gtin"] = digits;
-                }
+                    new Dictionary<string, object>
+                        {
+                            {"itemNo", no},
+                            {"code", baseUnitOfMeasureCode},
+                            {"qtyPerUnitOfMeasure", UomHelper.GetBcQtyPerUnitOfMeasure(company, baseUnitOfMeasureCode)},
+                            {"qtyRoundingPrecision", UomHelper.GetBcQtyRoundingPrecision(company, baseUnitOfMeasureCode)},
+                        }
+                };
+                
+                if (!baseUnitOfMeasureCode.Equals(tradeUnitOfMeasureCode))
+                    uomObjectList.Add(new Dictionary<string, object>
+                        {
+                            {"itemNo", no},
+                            {"code", tradeUnitOfMeasureCode},
+                            {"qtyPerUnitOfMeasure", UomHelper.GetBcQtyPerUnitOfMeasure(company, tradeUnitOfMeasureCode)},
+                            {"qtyRoundingPrecision", UomHelper.GetBcQtyRoundingPrecision(company, tradeUnitOfMeasureCode)},
+                        });
+                
+                if (uomObjectList.Count > 0)
+                    item["itemUnitOfMeasures"] = uomObjectList;
 
+                List<string> eanBarcodes = [];
                 // vendor item number
                 if (DictionaryHelper.TryGet(map, "artnr_lev", out string? vendorNo) && !string.IsNullOrWhiteSpace(vendorNo))
+                {
                     item["vendorItemNo"] = vendorNo;
+
+                    // it's possibly also a barcode
+                    if (GtinValidator.IsValidGtin(vendorNo, out _)) eanBarcodes.Add(vendorNo);
+                }
+
+                // barcode / ean -> map to gtin if available
+                if (DictionaryHelper.TryGet(map, "barcode", out string? barcode) && !string.IsNullOrWhiteSpace(barcode) && GtinValidator.IsValidGtin(barcode, out _) && !eanBarcodes.Contains(barcode))
+                    eanBarcodes.Add(barcode);
+
+                if (DictionaryHelper.TryGet(map, "ean", out string? ean) && !string.IsNullOrWhiteSpace(ean) && GtinValidator.IsValidGtin(ean, out _) && !eanBarcodes.Contains(ean))
+                    eanBarcodes.Add(ean);
+
+                if (DictionaryHelper.TryGet(map, "bar1", out string? bar1) && !string.IsNullOrWhiteSpace(bar1) && GtinValidator.IsValidGtin(bar1, out _) && !eanBarcodes.Contains(bar1))
+                    eanBarcodes.Add(bar1);
+
+                if (DictionaryHelper.TryGet(map, "bar2", out string? bar2) && !string.IsNullOrWhiteSpace(bar2) && GtinValidator.IsValidGtin(bar2, out _) && !eanBarcodes.Contains(bar2))
+                    eanBarcodes.Add(bar2);
+
+                if (DictionaryHelper.TryGet(map, "bar3", out string? bar3) && !string.IsNullOrWhiteSpace(bar3) && GtinValidator.IsValidGtin(bar3, out _) && !eanBarcodes.Contains(bar3))
+                    eanBarcodes.Add(bar3);
+
+                if (DictionaryHelper.TryGet(map, "bar4", out string? bar4) && !string.IsNullOrWhiteSpace(bar4) && GtinValidator.IsValidGtin(bar4, out _) && !eanBarcodes.Contains(bar4))
+                    eanBarcodes.Add(bar4);
+
+                if (eanBarcodes.Count > 0)
+                {
+                    item["gtin"] = eanBarcodes[0];
+
+                    var eanBarcodeList = new List<object>();
+                    foreach (var eanBarcode in eanBarcodes)
+                    {
+                        eanBarcodeList.Add(new Dictionary<string, object>
+                            {
+                                {"itemNo", no},
+                                {"referenceType", ItemReferencesBCRequest.ReferenceType_BarCode},
+                                {"referenceNo", eanBarcode},
+                                {"unitOfMeasure", tradeUnitOfMeasureCode}
+                            });
+                    }
+
+                    item["itemReferences"] = eanBarcodeList;
+                }
 
                 if (DictionaryHelper.TryGet(map, "groep", out string? orderItem) && !string.IsNullOrWhiteSpace(orderItem))
                 {
@@ -290,32 +310,5 @@ public static partial class BiebuyckItemsCsvToBCRequest
         }
     }
 
-    public static Dictionary<double, string> GetBcVatBusPostingGroupMapping(IConfiguration config, string company)
-    {
-        if(string.IsNullOrWhiteSpace(company) || !company.StartsWith("BIEBUYCK", StringComparison.OrdinalIgnoreCase))
-            ArgumentException.ThrowIfNullOrEmpty(company, "This method is only for company 'BIEBUYCK'");
-
-        ArgumentNullException.ThrowIfNull(config);
-        string sectionPath = $"Companies:{company}:VatData:VatBusPostingGroupMapping";
-        var vatDataSection = config.GetSection(sectionPath);
-
-        if (!vatDataSection.Exists())
-            throw new InvalidOperationException(
-                $"Configuratiesectie '{sectionPath}' werd niet gevonden.");
-
-        var dict = new Dictionary<double, string>();
-
-        foreach (var child in vatDataSection.GetChildren())
-        {
-            // child.Key = sleutel in appsettings, child.Value = stringwaarde
-            // Lege of null keys overslaan
-            if (!string.IsNullOrWhiteSpace(child.Key))
-            {
-                StringHelper.TryParseDouble(child.Value, CultureInfo.CurrentCulture, out double taxRate);
-                dict[taxRate] = child.Key ?? string.Empty;
-            }
-        }
-
-        return dict;
-    }
+    
 }

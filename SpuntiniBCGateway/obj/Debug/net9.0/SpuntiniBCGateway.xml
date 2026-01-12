@@ -4,6 +4,16 @@
         <name>SpuntiniBCGateway</name>
     </assembly>
     <members>
+        <member name="M:SpuntiniBCGateway.Services.BellaSiciliaCustomersExcelToBCRequest.MyRegex">
+            <remarks>
+            Pattern:<br/>
+            <code>\\D</code><br/>
+            Explanation:<br/>
+            <code>
+            ○ Match any character other than a Unicode digit.<br/>
+            </code>
+            </remarks>
+        </member>
         <member name="M:SpuntiniBCGateway.Services.BellaSiciliaHelper.MyRegex">
             <remarks>
             Pattern:<br/>
@@ -13,6 +23,53 @@
             ○ Match any character other than a Unicode digit.<br/>
             </code>
             </remarks>
+        </member>
+        <member name="T:SpuntiniBCGateway.Services.BellaSiciliaPeppolToBcRequest">
+            <summary>
+            Orchestrator for processing Peppol UBL documents for Bella Sicilia
+            Reads Peppol files from the configured source directory, determines document type,
+            and delegates to the appropriate handler (purchase invoice, purchase credit note, sales invoice, or sales credit note)
+            </summary>
+        </member>
+        <member name="T:SpuntiniBCGateway.Services.BellaSiciliaPurchaseCreditNoteToBcRequest">
+            <summary>
+            Transforms Peppol vendor credit notes to Business Central purchase credit memos for Bella Sicilia
+            </summary>
+        </member>
+        <member name="M:SpuntiniBCGateway.Services.BellaSiciliaPurchaseCreditNoteToBcRequest.ConvertPeppolToPurchaseCreditMemoJson(Microsoft.Extensions.Configuration.IConfigurationRoot,System.String,SpuntiniBCGateway.Services.PeppolDocument,SpuntiniBCGateway.Services.EventLog)">
+            <summary>
+            Converts a Peppol vendor credit note document to a Business Central purchase credit memo JSON representation
+            </summary>
+        </member>
+        <member name="T:SpuntiniBCGateway.Services.BellaSiciliaPurchaseInvoiceToBcRequest">
+            <summary>
+            Transforms Peppol vendor invoices to Business Central purchase orders for Bella Sicilia
+            </summary>
+        </member>
+        <member name="M:SpuntiniBCGateway.Services.BellaSiciliaPurchaseInvoiceToBcRequest.ConvertPeppolToPurchaseInvoiceJson(Microsoft.Extensions.Configuration.IConfigurationRoot,System.String,SpuntiniBCGateway.Services.PeppolDocument,SpuntiniBCGateway.Services.EventLog)">
+            <summary>
+            Converts a Peppol vendor invoice document to a Business Central purchase order JSON representation
+            </summary>
+        </member>
+        <member name="T:SpuntiniBCGateway.Services.BellaSiciliaSalesCreditNoteToBcRequest">
+            <summary>
+            Transforms Peppol client credit notes to Business Central sales credit memos for Bella Sicilia
+            </summary>
+        </member>
+        <member name="M:SpuntiniBCGateway.Services.BellaSiciliaSalesCreditNoteToBcRequest.ConvertPeppolToSalesCreditMemoJsonAsync(Microsoft.Extensions.Configuration.IConfigurationRoot,System.String,SpuntiniBCGateway.Services.PeppolDocument,System.Collections.Generic.Dictionary{System.String,System.Collections.Generic.Dictionary{System.String,System.String}},System.Collections.Generic.Dictionary{System.String,System.Collections.Generic.Dictionary{System.String,System.String}},System.Collections.Generic.Dictionary{System.String,System.String},SpuntiniBCGateway.Services.EventLog)">
+            <summary>
+            Converts a Peppol client credit note document to a Business Central sales credit memo JSON representation
+            </summary>
+        </member>
+        <member name="T:SpuntiniBCGateway.Services.BellaSiciliaSalesInvoiceToBcRequest">
+            <summary>
+            Transforms Peppol client invoices to Business Central sales orders for Bella Sicilia
+            </summary>
+        </member>
+        <member name="M:SpuntiniBCGateway.Services.BellaSiciliaSalesInvoiceToBcRequest.ConvertPeppolToSalesInvoiceJsonAsync(Microsoft.Extensions.Configuration.IConfigurationRoot,System.String,SpuntiniBCGateway.Services.PeppolDocument,System.Collections.Generic.Dictionary{System.String,System.Collections.Generic.Dictionary{System.String,System.String}},System.Collections.Generic.Dictionary{System.String,System.Collections.Generic.Dictionary{System.String,System.String}},System.Collections.Generic.Dictionary{System.String,System.String})">
+            <summary>
+            Converts a Peppol client invoice document to a Business Central sales order JSON representation
+            </summary>
         </member>
         <member name="M:SpuntiniBCGateway.Services.BiebuyckCustomerCsvToBCRequest.MyRegex">
             <remarks>
@@ -81,6 +138,37 @@
             using a DelegatingHandler that refreshes tokens transparently.
             </summary>
         </member>
+        <member name="M:SpuntiniBCGateway.Services.GtinValidator.IsValidGtin(System.String,SpuntiniBCGateway.Services.GtinType@)">
+            <summary>
+            Valideer of de invoer een geldige GTIN (EAN-13 of EAN-14) is.
+            </summary>
+        </member>
+        <member name="M:SpuntiniBCGateway.Services.GtinValidator.IsValidEan13(System.String)">
+            <summary>
+            Valideer specifiek op EAN-13.
+            </summary>
+        </member>
+        <member name="M:SpuntiniBCGateway.Services.GtinValidator.IsValidEan14(System.String)">
+            <summary>
+            Valideer specifiek op EAN-14.
+            </summary>
+        </member>
+        <member name="M:SpuntiniBCGateway.Services.GtinValidator.ComputeCheckDigit(System.String)">
+            <summary>
+            Berekent de checkdigit voor een GTIN string (zonder checkdigit),
+            en retourneert de berekende waarde (0-9).
+            </summary>
+        </member>
+        <member name="M:SpuntiniBCGateway.Services.GtinValidator.IsValidOfLength(System.String,System.Int32)">
+            <summary>
+            Interne helper: valideer lengte en checkdigit.
+            </summary>
+        </member>
+        <member name="M:SpuntiniBCGateway.Services.GtinValidator.HasValidCheckDigit(System.String)">
+            <summary>
+            Controleer of de laatste digit overeenstemt met de berekende checkdigit.
+            </summary>
+        </member>
         <member name="M:SpuntiniBCGateway.Services.JsonHelper.ReplacePathValues(System.String,System.Collections.Generic.Dictionary{System.String,System.Object},System.Boolean)">
             <summary>
             Past de tekstwaarde aan van een parameter in een JSON-string met eenvoudige dot-notatie (geen array indices).
@@ -96,6 +184,120 @@
             ○ Match any character other than a Unicode digit.<br/>
             </code>
             </remarks>
+        </member>
+        <member name="T:SpuntiniBCGateway.Services.PeppolDocumentType">
+            <summary>
+            Enumeration of supported Peppol document types
+            </summary>
+        </member>
+        <member name="F:SpuntiniBCGateway.Services.PeppolDocumentType.ClientInvoice">
+            <summary>Invoice from supplier to customer (TypeCode 380)</summary>
+        </member>
+        <member name="F:SpuntiniBCGateway.Services.PeppolDocumentType.ClientCreditNote">
+            <summary>Credit note from supplier to customer (TypeCode 381)</summary>
+        </member>
+        <member name="F:SpuntiniBCGateway.Services.PeppolDocumentType.VendorInvoice">
+            <summary>Invoice from customer to supplier (TypeCode 380, but in reverse direction)</summary>
+        </member>
+        <member name="F:SpuntiniBCGateway.Services.PeppolDocumentType.VendorCreditNote">
+            <summary>Credit note from customer to supplier (TypeCode 381, but in reverse direction)</summary>
+        </member>
+        <member name="T:SpuntiniBCGateway.Services.PeppolPartyRole">
+            <summary>
+            Enumeration to identify party role in the document
+            </summary>
+        </member>
+        <member name="T:SpuntiniBCGateway.Services.PeppolDocumentHeader">
+            <summary>
+            Represents a Peppol UBL document header with metadata and party information
+            </summary>
+        </member>
+        <member name="T:SpuntiniBCGateway.Services.PeppolDocumentLine">
+            <summary>
+            Represents a Peppol UBL document line (invoice line or credit note line)
+            </summary>
+        </member>
+        <member name="T:SpuntiniBCGateway.Services.PeppolParty">
+            <summary>
+            Represents party information (supplier or customer)
+            </summary>
+        </member>
+        <member name="T:SpuntiniBCGateway.Services.PeppolAddress">
+            <summary>
+            Represents address information
+            </summary>
+        </member>
+        <member name="T:SpuntiniBCGateway.Services.PeppolContact">
+            <summary>
+            Represents contact information
+            </summary>
+        </member>
+        <member name="T:SpuntiniBCGateway.Services.PeppolDeliveryInfo">
+            <summary>
+            Represents delivery information
+            </summary>
+        </member>
+        <member name="T:SpuntiniBCGateway.Services.PeppolTaxTotal">
+            <summary>
+            Represents tax information for an invoice
+            </summary>
+        </member>
+        <member name="T:SpuntiniBCGateway.Services.PeppolTaxSubtotal">
+            <summary>
+            Represents tax subtotal (per tax category)
+            </summary>
+        </member>
+        <member name="T:SpuntiniBCGateway.Services.PeppolLineTax">
+            <summary>
+            Represents tax information for an invoice line
+            </summary>
+        </member>
+        <member name="T:SpuntiniBCGateway.Services.PeppolDocument">
+            <summary>
+            Complete Peppol UBL Document (Invoice, Credit Note, etc.)
+            </summary>
+        </member>
+        <member name="T:SpuntiniBCGateway.Services.PeppolUblReader">
+            <summary>
+            Peppol UBL Document file reader that parses XML files and transforms them to PeppolDocument objects
+            Supports invoices, credit notes, and other Peppol document types
+            </summary>
+        </member>
+        <member name="M:SpuntiniBCGateway.Services.PeppolUblReader.ReadPeppolDocument(System.String)">
+            <summary>
+            Reads a Peppol UBL XML file and transforms it to a PeppolDocument object
+            Supports invoices, credit notes, and other document types
+            </summary>
+        </member>
+        <member name="M:SpuntiniBCGateway.Services.PeppolUblReader.ReadPeppolDocumentFromStream(System.IO.Stream)">
+            <summary>
+            Reads a Peppol UBL XML from a stream and transforms it to a PeppolDocument object
+            </summary>
+        </member>
+        <member name="M:SpuntiniBCGateway.Services.PeppolUblReader.ReadPeppolDocumentFromString(System.String)">
+            <summary>
+            Reads a Peppol UBL XML string and transforms it to a PeppolDocument object
+            </summary>
+        </member>
+        <member name="M:SpuntiniBCGateway.Services.PeppolUblReader.DeterminePeppolDocumentType(System.String,System.String)">
+            <summary>
+            Determines the Peppol document type based on the type code and element name
+            </summary>
+        </member>
+        <member name="M:SpuntiniBCGateway.Services.PeppolUblReader.GetElementValue(System.Xml.Linq.XElement,System.Collections.Generic.List{System.Xml.Linq.XName})">
+            <summary>
+            Helper method to get element value with namespace
+            </summary>
+        </member>
+        <member name="M:SpuntiniBCGateway.Services.PeppolUblReader.ParseDecimal(System.String)">
+            <summary>
+            Helper method to safely parse decimal values
+            </summary>
+        </member>
+        <member name="M:SpuntiniBCGateway.Services.PeppolUblReader.ParseAttachment(System.Xml.Linq.XElement)">
+            <summary>
+            Parses an AdditionalDocumentReference element to extract PDF attachment information
+            </summary>
         </member>
         <member name="M:SpuntiniBCGateway.Services.VatSanitizer.Clean(System.String,System.String)">
             <summary>
@@ -194,6 +396,16 @@
         <member name="M:SpuntiniBCGateway.Services.EuVatValidator.TryValidate(System.String,System.String@,System.String)">
             <summary>
             Probeert landcode af te leiden uit string. Als afwezig kun je defaultCountryCode meegeven.
+            </summary>
+        </member>
+        <member name="T:SpuntiniBCGateway.Swagger.ParameterEnumFilter">
+            <summary>
+            Adds enum constraints to gateway API parameters for dropdown selection in Swagger UI
+            </summary>
+        </member>
+        <member name="T:SpuntiniBCGateway.Swagger.TextParameterFilter">
+            <summary>
+            Configures text parameters without constraints for the Swagger UI
             </summary>
         </member>
         <member name="T:System.Text.RegularExpressions.Generated.MyRegex_0">

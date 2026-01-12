@@ -6,7 +6,7 @@ namespace SpuntiniBCGateway.Services;
 public class EmailSanitizer
 {
     // RFC-achtige set voor local-part (ASCII), pragmatisch:
-    private static readonly Regex LocalAllowed = new(@"[^A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]", RegexOptions.Compiled);
+    private static readonly Regex LocalAllowed = new(@"[^A-Za-z0-9.!#$%&;'*+/=?^_`{|}~-]", RegexOptions.Compiled);
     // Domein: labels gescheiden door punt, elk label: letters, digits, '-', maar geen leading/trailing '-'
     private static readonly Regex DomainAllowed = new(@"[^A-Za-z0-9\.\-]", RegexOptions.Compiled);
 

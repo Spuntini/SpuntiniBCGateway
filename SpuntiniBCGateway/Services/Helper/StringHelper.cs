@@ -5,9 +5,7 @@ using System.Text.RegularExpressions;
 namespace SpuntiniBCGateway.Services;
 
 public static partial class StringHelper
-{
-
-
+{ 
     // Tries to get a value from the dictionary by key, ignoring case.
     public static Encoding GetEncoding(string encodingName)
     {

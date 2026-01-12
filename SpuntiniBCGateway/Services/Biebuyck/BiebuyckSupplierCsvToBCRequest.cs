@@ -9,14 +9,14 @@ public static partial class BiebuyckSupplierCsvToBCRequest
 {
     public static async Task<Dictionary<string, Dictionary<string, string>>> GetSuppliersAsync(HttpClient client, IConfigurationRoot config, string? company = null, string? filter = null, EventLog? logger = null, AuthHelper? authHelper = null, CancellationToken cancellationToken = default)
     {
-        if(string.IsNullOrWhiteSpace(company) || !company.StartsWith("BIEBUYCK", StringComparison.OrdinalIgnoreCase))
+        if (string.IsNullOrWhiteSpace(company) || !company.StartsWith("BIEBUYCK", StringComparison.OrdinalIgnoreCase))
             ArgumentException.ThrowIfNullOrEmpty(company, "This method is only for company 'BIEBUYCK'");
-            
+
         string supplierUrl = config[$"Companies:{company}:SupplierData:DestinationApiUrl"] ?? throw new ArgumentException($"Companies:{company}:SupplierData:DestinationApiUrl required in config");
-                
+
         if (!string.IsNullOrWhiteSpace(filter))
         {
-            supplierUrl += "&$filter=" + Uri.EscapeDataString(filter);
+            supplierUrl += "&$filter=" + filter;
         }
         else
         {
@@ -31,83 +31,70 @@ public static partial class BiebuyckSupplierCsvToBCRequest
 
     public static async Task<Dictionary<string, Dictionary<string, string>>?> GetSuppliersByCommentAsync(HttpClient client, IConfigurationRoot config, string? company = null, string? filter = null, EventLog? logger = null, AuthHelper? authHelper = null, CancellationToken cancellationToken = default)
     {
-        if(string.IsNullOrWhiteSpace(company) || !company.StartsWith("BIEBUYCK", StringComparison.OrdinalIgnoreCase))
+        if (string.IsNullOrWhiteSpace(company) || !company.StartsWith("BIEBUYCK", StringComparison.OrdinalIgnoreCase))
             ArgumentException.ThrowIfNullOrEmpty(company, "This method is only for company 'BIEBUYCK'");
 
-        string commentUrl = config[$"Companies:{company}:CommentLineData:DestinationApiUrl"] ?? throw new ArgumentException($"Companies:{company}:CommentLineData:DestinationApiUrl required in config");
-        if (string.IsNullOrWhiteSpace(commentUrl))
-            throw new ArgumentException($"Companies:{company}:CommentLineData:DestinationApiUrl required in config");
-        
         string supplierUrl = config[$"Companies:{company}:SupplierData:DestinationApiUrl"] ?? throw new ArgumentException($"Companies:{company}:SupplierData:DestinationApiUrl required in config");
         if (string.IsNullOrWhiteSpace(supplierUrl))
-            throw new ArgumentException($"Companies:{company}:SupplierData:DestinationApiUrl required in config"); 
+            throw new ArgumentException($"Companies:{company}:SupplierData:DestinationApiUrl required in config");
         if (!string.IsNullOrWhiteSpace(filter))
         {
-            commentUrl += "&$filter=" + Uri.EscapeDataString(filter);
+            supplierUrl += "&$filter=" + filter;
         }
-        else
+       
+        var supplierResult = await BcRequest.GetBcDataAsync(client, supplierUrl, "systemId", EventLog.GetMethodName(), logger, company, authHelper, cancellationToken);
+       
+        if (supplierResult == null || supplierResult.Count == 0)
+            return supplierResult;
+
+        var commentSupplierResult = new Dictionary<string, Dictionary<string, string>>();
+        foreach (var supplierData in supplierResult.Values)
         {
-            commentUrl += config[$"Companies:{company}:CommentLineData:SelectAllFilter"] ?? "";
-        }
-
-        Dictionary<string, Dictionary<string, string>> tempResult;
-        if (string.IsNullOrWhiteSpace(filter))
-            tempResult = await BcRequest.GetBcDataAsync(client, commentUrl, "no", EventLog.GetMethodName(), logger, company, authHelper, cancellationToken);
-        else
-            tempResult = await BcRequest.GetBcDataAsync(client, commentUrl + filter, "no", EventLog.GetMethodName(), logger, company, authHelper, cancellationToken);
-
-        if (tempResult == null || tempResult.Count == 0)
-            return tempResult;
-
-        var tempResultBySupplier = new Dictionary<string, Dictionary<string, string>>();
-        foreach (var item in tempResult)
-        {
-            if (item.Value != null && item.Value.TryGetValue("comment", out string? supplierNo))
+            if (supplierData != null && supplierData.TryGetValue("commentLines", out string? commentLine))
             {
-                if (!string.IsNullOrWhiteSpace(supplierNo))
+                if (!string.IsNullOrWhiteSpace(commentLine))
                 {
-                    item.Value.TryGetValue("no", out string? no);
-
-                    if (!tempResultBySupplier.ContainsKey(supplierNo) && !string.IsNullOrWhiteSpace(no))
+                    var commentData = JsonHelper.GetDataFromJsonString(commentLine, "comment");
+                    if (commentData != null)
                     {
-                        var supplierData = await BcRequest.GetBcDataAsync(client, supplierUrl + $"?$filter=no eq '{no.Replace("'", "''")}'", "no", EventLog.GetMethodName(), logger, company, authHelper, cancellationToken);
-
-                        tempResultBySupplier[supplierNo] = supplierData[no];
+                        foreach(var commentCode in commentData.Keys)
+                        {
+                            commentSupplierResult[commentCode] = supplierData;
+                        }
                     }
                 }
             }
         }
 
-        return tempResultBySupplier;
+        return commentSupplierResult;
     }
 
-
-    public static async Task<HttpResponseMessage?> GetSupplierAsync(HttpClient client, IConfigurationRoot config, string? company = null, string? supplierCode = null, EventLog? logger = null, AuthHelper? authHelper = null, CancellationToken cancellationToken = default)
+    public static async Task<HttpResponseMessage?> GetSupplierListAsync(HttpClient client, IConfigurationRoot config, string? company = null, List<string>? supplierCodeList = null, EventLog? logger = null, AuthHelper? authHelper = null, CancellationToken cancellationToken = default)
     {
-        if(string.IsNullOrWhiteSpace(company) || !company.StartsWith("BIEBUYCK", StringComparison.OrdinalIgnoreCase))
+        if (string.IsNullOrWhiteSpace(company) || !company.StartsWith("BIEBUYCK", StringComparison.OrdinalIgnoreCase))
             ArgumentException.ThrowIfNullOrEmpty(company, "This method is only for company 'BIEBUYCK'");
 
-        string json = ConvertCsvToSupplierJson(config, company, supplierCode, logger).First();
+        string json = ConvertCsvToSupplierJson(config, company, supplierCodeList, logger).First();
         return await ItemBCRequest.UpsertItemAsync(client, config, company, json, null, logger, authHelper, cancellationToken);
     }
 
     public static async Task<HttpResponseMessage?> SyncSuppliersAsync(HttpClient client, IConfigurationRoot config, string? company = null, Dictionary<string, Dictionary<string, string>>? allSupplierData = null, EventLog? logger = null, AuthHelper? authHelper = null, CancellationToken cancellationToken = default)
     {
-        if(string.IsNullOrWhiteSpace(company) || !company.StartsWith("BIEBUYCK", StringComparison.OrdinalIgnoreCase))
+        if (string.IsNullOrWhiteSpace(company) || !company.StartsWith("BIEBUYCK", StringComparison.OrdinalIgnoreCase))
             ArgumentException.ThrowIfNullOrEmpty(company, "This method is only for company 'BIEBUYCK'");
 
-        string json = ConvertCsvToSupplierJson(config, company, company, logger).First();
+        string json = ConvertCsvToSupplierJson(config, company, null, logger).First();
         return await ItemBCRequest.UpsertItemAsync(client, config, company, json, allSupplierData, logger, authHelper, cancellationToken);
     }
 
-    public static async Task<string> ProcessSuppliersAsync(HttpClient client, IConfigurationRoot config, string? company = null, Dictionary<string, Dictionary<string, string>>? allSupplierData = null, EventLog? logger = null, AuthHelper? authHelper = null, CancellationToken cancellationToken = default)
+    public static async Task<string> ProcessSuppliersAsync(HttpClient client, IConfigurationRoot config, string? company = null, List<string>? supplierCodeList = null, Dictionary<string, Dictionary<string, string>>? allSupplierData = null, EventLog? logger = null, AuthHelper? authHelper = null, CancellationToken cancellationToken = default)
     {
         var stopwatchSuppliers = Stopwatch.StartNew();
-        if(string.IsNullOrWhiteSpace(company) || !company.StartsWith("BIEBUYCK", StringComparison.OrdinalIgnoreCase))
+        if (string.IsNullOrWhiteSpace(company) || !company.StartsWith("BIEBUYCK", StringComparison.OrdinalIgnoreCase))
             ArgumentException.ThrowIfNullOrEmpty(company, "This method is only for company 'BIEBUYCK'");
 
         if (logger != null) await logger.InfoAsync(EventLog.GetMethodName(), company, $"Start processing suppliers for company '{company}'.");
-        foreach (string json in ConvertCsvToSupplierJson(config, company, null, logger))
+        foreach (string json in ConvertCsvToSupplierJson(config, company, supplierCodeList, logger))
         {
             try
             {
@@ -126,9 +113,9 @@ public static partial class BiebuyckSupplierCsvToBCRequest
 
     // Convert CSV rows to JSON request bodies suitable for Business Central vendors (suppliers) API.
     // Maps common columns from the provided sample CSV to a minimal BC vendor payload.
-    public static IEnumerable<string> ConvertCsvToSupplierJson(IConfigurationRoot config, string? company = null, string? supplierCode = null, EventLog? logger = null)
+    public static IEnumerable<string> ConvertCsvToSupplierJson(IConfigurationRoot config, string? company = null, List<string>? supplierCodeList = null, EventLog? logger = null)
     {
-        if(string.IsNullOrWhiteSpace(company) || !company.StartsWith("BIEBUYCK", StringComparison.OrdinalIgnoreCase))
+        if (string.IsNullOrWhiteSpace(company) || !company.StartsWith("BIEBUYCK", StringComparison.OrdinalIgnoreCase))
             ArgumentException.ThrowIfNullOrEmpty(company, "This method is only for company 'BIEBUYCK'");
 
         string sourceType = config[$"Companies:{company}:SupplierData:SourceType"] ?? "CSV";
@@ -163,6 +150,8 @@ public static partial class BiebuyckSupplierCsvToBCRequest
         if (headerLine == null)
             yield break;
 
+        string? actualSkipped = null;
+
         if (encoding != Encoding.UTF8)
             headerLine = Encoding.UTF8.GetString(Encoding.Convert(encoding, Encoding.UTF8, encoding.GetBytes(headerLine)));
 
@@ -181,33 +170,27 @@ public static partial class BiebuyckSupplierCsvToBCRequest
 
                 var vendor = new Dictionary<string, object>();
 
-                string? number = "";
                 // Supplier number
-                if (DictionaryHelper.TryGet(map, "nummer", out number))
+                if (DictionaryHelper.TryGet(map, "nummer", out string? number))
                 {
                     if (string.IsNullOrWhiteSpace(number))
                         continue;
 
                     // MUST BE SPECIFIC SUPPLIER NUMBER
-                    if (!string.IsNullOrWhiteSpace(supplierCode) && number.Equals(supplierCode, StringComparison.InvariantCultureIgnoreCase))
+                    if (supplierCodeList != null && supplierCodeList.Count > 0 && !supplierCodeList.Contains(number))
                         continue;
 
                     vendor["no"] = number;
                 }
 
                 if (string.IsNullOrWhiteSpace(number))
-                {
-                    if (!string.IsNullOrWhiteSpace(supplierCode))
-                    {
-                        logger?.ErrorAsync(EventLog.GetMethodName(), company, new Exception($"Supplier {supplierCode} not found in file")).Wait();
-                    }
-                    else
-                    {
-                        logger?.WarningAsync(EventLog.GetMethodName(), company, $"Skipping malformed CSV line, no supplier code {line}").Wait();
-                    }
-
                     continue;
-                }
+                
+                // Avoid writing logs for each line from same order ==> slows the proces down. So always safe last skipped docNum.
+                if (!string.IsNullOrWhiteSpace(actualSkipped) && actualSkipped.Equals(number))
+                    continue;
+
+                actualSkipped = number;
 
                 // Name / display
                 if (DictionaryHelper.TryGet(map, "naam", out string? name) && !string.IsNullOrWhiteSpace(name))

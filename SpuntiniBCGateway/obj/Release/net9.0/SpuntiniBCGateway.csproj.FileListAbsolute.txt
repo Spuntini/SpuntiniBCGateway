@@ -84,3 +84,14 @@ C:\Users\lode.vanderstichele\Spuntini BVBA\Spuntinigroup - IT - Documenten\Proje
 C:\Users\lode.vanderstichele\Spuntini BVBA\Spuntinigroup - IT - Documenten\Project\SpuntiniBCGateway\SpuntiniBCGateway\obj\Release\net9.0\SpuntiniBCGateway.pdb
 C:\Users\lode.vanderstichele\Spuntini BVBA\Spuntinigroup - IT - Documenten\Project\SpuntiniBCGateway\SpuntiniBCGateway\obj\Release\net9.0\SpuntiniBCGateway.genruntimeconfig.cache
 C:\Users\lode.vanderstichele\Spuntini BVBA\Spuntinigroup - IT - Documenten\Project\SpuntiniBCGateway\SpuntiniBCGateway\obj\Release\net9.0\ref\SpuntiniBCGateway.dll
+C:\Users\lode.vanderstichele\Spuntini BVBA\Spuntinigroup - IT - Documenten\Project\SpuntiniBCGateway\SpuntiniBCGateway\bin\Release\net9.0\gateway-schedule.json
+C:\Users\lode.vanderstichele\Spuntini BVBA\Spuntinigroup - IT - Documenten\Project\SpuntiniBCGateway\SpuntiniBCGateway\bin\Release\net9.0\SpuntiniBCGateway.xml
+C:\Users\lode.vanderstichele\Spuntini BVBA\Spuntinigroup - IT - Documenten\Project\SpuntiniBCGateway\SpuntiniBCGateway\bin\Release\net9.0\ClosedXML.dll
+C:\Users\lode.vanderstichele\Spuntini BVBA\Spuntinigroup - IT - Documenten\Project\SpuntiniBCGateway\SpuntiniBCGateway\bin\Release\net9.0\DocumentFormat.OpenXml.dll
+C:\Users\lode.vanderstichele\Spuntini BVBA\Spuntinigroup - IT - Documenten\Project\SpuntiniBCGateway\SpuntiniBCGateway\bin\Release\net9.0\ExcelNumberFormat.dll
+C:\Users\lode.vanderstichele\Spuntini BVBA\Spuntinigroup - IT - Documenten\Project\SpuntiniBCGateway\SpuntiniBCGateway\bin\Release\net9.0\Irony.dll
+C:\Users\lode.vanderstichele\Spuntini BVBA\Spuntinigroup - IT - Documenten\Project\SpuntiniBCGateway\SpuntiniBCGateway\bin\Release\net9.0\SixLabors.Fonts.dll
+C:\Users\lode.vanderstichele\Spuntini BVBA\Spuntinigroup - IT - Documenten\Project\SpuntiniBCGateway\SpuntiniBCGateway\bin\Release\net9.0\System.IO.Packaging.dll
+C:\Users\lode.vanderstichele\Spuntini BVBA\Spuntinigroup - IT - Documenten\Project\SpuntiniBCGateway\SpuntiniBCGateway\bin\Release\net9.0\XLParser.dll
+C:\Users\lode.vanderstichele\Spuntini BVBA\Spuntinigroup - IT - Documenten\Project\SpuntiniBCGateway\SpuntiniBCGateway\obj\Release\net9.0\SpuntiniBCGateway.sourcelink.json
+C:\Users\lode.vanderstichele\Spuntini BVBA\Spuntinigroup - IT - Documenten\Project\SpuntiniBCGateway\SpuntiniBCGateway\obj\Release\net9.0\SpuntiniBCGateway.xml

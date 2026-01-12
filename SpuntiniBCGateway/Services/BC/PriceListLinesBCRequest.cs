@@ -54,7 +54,7 @@ public static class PriceListLinesBCRequest
 
                 if (!string.IsNullOrWhiteSpace(filter))
                 {
-                    string getUrl = collectionUrl + "?$select=systemId&$filter=" + Uri.EscapeDataString(filter);
+                    string getUrl = collectionUrl + "?$select=systemId&$filter=" + filter;
 
                     result = (await BcRequest.GetBcDataAsync(client, getUrl, "no", EventLog.GetMethodName(), logger, company, authHelper, cancellationToken)).FirstOrDefault().Value;
 
@@ -167,7 +167,7 @@ public static class PriceListLinesBCRequest
 
                 if (!string.IsNullOrWhiteSpace(filter))
                 {
-                    string getUrl = collectionUrl + "?$filter=" + Uri.EscapeDataString(filter);
+                    string getUrl = collectionUrl + "?$filter=" + filter;
 
                     result = (await BcRequest.GetBcDataAsync(client, getUrl, "no", EventLog.GetMethodName(), logger, company, authHelper, cancellationToken)).FirstOrDefault().Value;
 

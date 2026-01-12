@@ -1,9 +1,39 @@
+using System.Globalization;
 using System.Text.RegularExpressions;
 
 namespace SpuntiniBCGateway.Services;
 
 public partial class BiebuyckHelper
 {
+    public static Dictionary<double, string> GetBcVatBusPostingGroupMapping(IConfiguration config, string company)
+    {
+        if (string.IsNullOrWhiteSpace(company) || !company.StartsWith("BIEBUYCK", StringComparison.OrdinalIgnoreCase))
+            ArgumentException.ThrowIfNullOrEmpty(company, "This method is only for company 'BIEBUYCK'");
+
+        ArgumentNullException.ThrowIfNull(config);
+        string sectionPath = $"Companies:{company}:VatData:VatBusPostingGroupMapping";
+        var vatDataSection = config.GetSection(sectionPath);
+
+        if (!vatDataSection.Exists())
+            throw new InvalidOperationException(
+                $"Configuratiesectie '{sectionPath}' werd niet gevonden.");
+
+        var dict = new Dictionary<double, string>();
+
+        foreach (var child in vatDataSection.GetChildren())
+        {
+            // child.Key = sleutel in appsettings, child.Value = stringwaarde
+            // Lege of null keys overslaan
+            if (!string.IsNullOrWhiteSpace(child.Key))
+            {
+                StringHelper.TryParseDouble(child.Value, CultureInfo.CurrentCulture, out double taxRate);
+                dict[taxRate] = child.Key ?? string.Empty;
+            }
+        }
+
+        return dict;
+    }
+    
     public static string? GetBcUom(string uom, string? defaultUom = UomHelper._defaultSystemUom)
     {
         if (string.IsNullOrWhiteSpace(uom)) return defaultUom;

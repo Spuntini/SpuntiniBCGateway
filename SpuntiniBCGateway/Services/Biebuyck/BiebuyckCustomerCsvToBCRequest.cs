@@ -1,5 +1,4 @@
 using System.Diagnostics;
-using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -10,50 +9,39 @@ public static partial class BiebuyckCustomerCsvToBCRequest
 {
     public static async Task<Dictionary<string, Dictionary<string, string>>> GetCustomersAsync(HttpClient client, IConfigurationRoot config, string? company = null, string? filter = null, EventLog? logger = null, AuthHelper? authHelper = null, CancellationToken cancellationToken = default)
     {
-        if(string.IsNullOrWhiteSpace(company) || !company.StartsWith("BIEBUYCK", StringComparison.OrdinalIgnoreCase))
+        if (string.IsNullOrWhiteSpace(company) || !company.StartsWith("BIEBUYCK", StringComparison.OrdinalIgnoreCase))
             ArgumentException.ThrowIfNullOrEmpty(company, "This method is only for company 'BIEBUYCK'");
-
-        string customerUrl = config[$"Companies:{company}:CustomerData:DestinationApiUrl"] ?? throw new ArgumentException($"Companies:{company}:CustomerData:DestinationApiUrl required in config");
-
-        if (!string.IsNullOrWhiteSpace(filter))
-        {
-            customerUrl += "&$filter=" + Uri.EscapeDataString(filter);
-        }
-        else
-        {
-            customerUrl += config[$"Companies:{company}:CustomerData:SelectAllFilter"] ?? "";
-        }
-
-        return await BcRequest.GetBcDataAsync(client, customerUrl, "no", EventLog.GetMethodName(), logger, company, authHelper, cancellationToken);
+        
+        return await CustomerBCRequest.GetCustomersAsync(client, config, company, "no", filter, logger, authHelper, cancellationToken);
     }
 
-    public static async Task<HttpResponseMessage?> GetCustomerAsync(HttpClient client, IConfigurationRoot config, string? company = null, string? customerCode = null, EventLog? logger = null, AuthHelper? authHelper = null, CancellationToken cancellationToken = default)
+    public static async Task<HttpResponseMessage?> GetCustomerListAsync(HttpClient client, IConfigurationRoot config, string? company = null, List<string>? customerCodeList = null, EventLog? logger = null, AuthHelper? authHelper = null, CancellationToken cancellationToken = default)
     {
-        if(string.IsNullOrWhiteSpace(company) || !company.StartsWith("BIEBUYCK", StringComparison.OrdinalIgnoreCase))
+        if (string.IsNullOrWhiteSpace(company) || !company.StartsWith("BIEBUYCK", StringComparison.OrdinalIgnoreCase))
             ArgumentException.ThrowIfNullOrEmpty(company, "This method is only for company 'BIEBUYCK'");
 
-        string json = ConvertCsvToCustomerJson(config, company, customerCode, logger).First();
+        string json = ConvertCsvToCustomerJson(config, company, customerCodeList, logger).First();
         return await CustomerBCRequest.UpsertCustomerAsync(client, config, company, json, null, logger, authHelper, cancellationToken);
     }
 
     public static async Task<HttpResponseMessage?> SyncCustomersAsync(HttpClient client, IConfigurationRoot config, string? company = null, Dictionary<string, Dictionary<string, string>>? allCustomerData = null, EventLog? logger = null, AuthHelper? authHelper = null, CancellationToken cancellationToken = default)
     {
-        if(string.IsNullOrWhiteSpace(company) || !company.StartsWith("BIEBUYCK", StringComparison.OrdinalIgnoreCase))
+        if (string.IsNullOrWhiteSpace(company) || !company.StartsWith("BIEBUYCK", StringComparison.OrdinalIgnoreCase))
             ArgumentException.ThrowIfNullOrEmpty(company, "This method is only for company 'BIEBUYCK'");
 
         string json = ConvertCsvToCustomerJson(config, company, null, logger).First();
         return await CustomerBCRequest.UpsertCustomerAsync(client, config, company, json, allCustomerData, logger, authHelper, cancellationToken);
     }
 
-    public static async Task<string> ProcessCustomersAsync(HttpClient client, IConfigurationRoot config, string? company = null, Dictionary<string, Dictionary<string, string>>? allCustomerData = null, EventLog? logger = null, AuthHelper? authHelper = null, CancellationToken cancellationToken = default)
+    public static async Task<string> ProcessCustomersAsync(HttpClient client, IConfigurationRoot config, string? company = null, List<string>? customerCodeList = null, Dictionary<string, Dictionary<string, string>>? allCustomerData = null, EventLog? logger = null, AuthHelper? authHelper = null, CancellationToken cancellationToken = default)
     {
-        if(string.IsNullOrWhiteSpace(company) || !company.StartsWith("BIEBUYCK", StringComparison.OrdinalIgnoreCase))
+        if (string.IsNullOrWhiteSpace(company) || !company.StartsWith("BIEBUYCK", StringComparison.OrdinalIgnoreCase))
             ArgumentException.ThrowIfNullOrEmpty(company, "This method is only for company 'BIEBUYCK'");
 
         var stopwatchSuppliers = Stopwatch.StartNew();
         if (logger != null) await logger.InfoAsync(EventLog.GetMethodName(), company, $"Start processing suppliers for company '{company}'.");
 
-        foreach (string json in ConvertCsvToCustomerJson(config, company, null, logger))
+        foreach (string json in ConvertCsvToCustomerJson(config, company, customerCodeList, logger))
         {
             try
             {
@@ -72,7 +60,7 @@ public static partial class BiebuyckCustomerCsvToBCRequest
 
     // Convert CSV rows to JSON request bodies suitable for Business Central customers API.
     // Maps common columns from the provided sample CSV to a minimal BC customer payload.
-    public static IEnumerable<string> ConvertCsvToCustomerJson(IConfigurationRoot config, string? company = null, string? customerCode = null, EventLog? logger = null)
+    public static IEnumerable<string> ConvertCsvToCustomerJson(IConfigurationRoot config, string? company = null, List<string>? customerCodeList = null, EventLog? logger = null)
     {
         string sourceType = config[$"Companies:{company}:CustomerData:SourceType"] ?? "CSV";
 
@@ -99,7 +87,7 @@ public static partial class BiebuyckCustomerCsvToBCRequest
         string systemFrench = config[$"Companies:{company}:BusinessCentral:FrenchLanguageCode"] ?? "FRB";
         string defaultSystemCountryCode = config[$"Companies:{company}:BusinessCentral:DefaultSystemCountryCode"] ?? "BE";
         string defaultSystemLanguageCode = config[$"Companies:{company}:BusinessCentral:DefaultSystemLanguageCode"] ?? "NLB";
-        bool skipDuplicateCheck = bool.TryParse(config["$Companies:{company}:CustomerData:SkipDuplicateCheck"], out bool skip) ? skip : false;
+        bool skipDuplicateCheck = bool.TryParse(config["$Companies:{company}:CustomerData:SkipDuplicateCheck"], out bool skip) && skip;
         List<string> manualInvoicedCodes = config[$"Companies:{company}:CustomerData:ManualInvoicedCodes"]?.Split(',')?.ToList() ?? [];
         List<string> dailyInvoicedCodes = config[$"Companies:{company}:CustomerData:DailyInvoicedCodes"]?.Split(',')?.ToList() ?? [];
         List<string> weeklyInvoicedCodes = config[$"Companies:{company}:CustomerData:WeeklyInvoicedCodes"]?.Split(',')?.ToList() ?? [];
@@ -107,13 +95,12 @@ public static partial class BiebuyckCustomerCsvToBCRequest
 
         Encoding encoding = StringHelper.GetEncoding(encodingName);
 
-        List<string> unknowCustomerList = [];
-
         using var sr = new StreamReader(csvPath, encoding);
         string? headerLine = sr.ReadLine();
         if (headerLine == null)
             yield break;
 
+        string? actualSkipped = null;
         if (encoding != Encoding.UTF8)
             headerLine = Encoding.UTF8.GetString(Encoding.Convert(encoding, Encoding.UTF8, encoding.GetBytes(headerLine)));
 
@@ -133,8 +120,7 @@ public static partial class BiebuyckCustomerCsvToBCRequest
                 // Map known CSV columns to Business Central customer fields (minimal set)
                 var customer = new Dictionary<string, object>();
 
-                string? number = "";
-                if (DictionaryHelper.TryGet(map, "nummer", out number))
+                if (DictionaryHelper.TryGet(map, "nummer", out string? number))
                 {
                     if (string.IsNullOrWhiteSpace(number))
                     {
@@ -144,36 +130,24 @@ public static partial class BiebuyckCustomerCsvToBCRequest
                     number = customerNumberPrefix + number;
 
                     // MUST BE SPECIFIC CUSTOMER NUMBER
-                    if (!string.IsNullOrWhiteSpace(customerCode) && !number.Equals(customerCode, StringComparison.InvariantCultureIgnoreCase))
+                    if (customerCodeList != null && customerCodeList.Count > 0 && !customerCodeList.Contains(number))
                         continue;
 
                     customer["no"] = number;
                 }
 
                 if (string.IsNullOrWhiteSpace(number))
-                {
-                    if (!string.IsNullOrWhiteSpace(customerCode))
-                    {
-                        if (unknowCustomerList.Contains(customerCode))
-                        {
-                            logger?.WarningAsync(EventLog.GetMethodName(), company, $"Customer {customerCode} not found in file, but already flagged").Wait();
-                            continue;
-                        }
-
-                        unknowCustomerList.Add(customerCode);
-                        logger?.ErrorAsync(EventLog.GetMethodName(), company, new Exception($"Customer {customerCode} not found in file")).Wait();
-                    }
-                    else
-                    {
-                        logger?.WarningAsync(EventLog.GetMethodName(), company, $"Skipping malformed CSV line, no customer code {line}").Wait();
-                    }
-
                     continue;
-                }
+                
+                // Avoid writing logs for each line from same order ==> slows the proces down. So always safe last skipped docNum.
+                if (!string.IsNullOrWhiteSpace(actualSkipped) && actualSkipped.Equals(number))
+                    continue;
+
+                actualSkipped = number;
 
                 if (DictionaryHelper.TryGet(map, "aktief", out string? active))
                 {
-                    if (!string.IsNullOrWhiteSpace(active) && active.Equals("N", StringComparison.OrdinalIgnoreCase) && string.IsNullOrWhiteSpace(customerCode))
+                    if (!string.IsNullOrWhiteSpace(active) && active.Equals("N", StringComparison.OrdinalIgnoreCase) && (customerCodeList == null || customerCodeList.Count <= 0))
                     {
                         logger?.InfoAsync(EventLog.GetMethodName(), company, $"Skipping inactive customer: {customer["no"]}").Wait();
                         continue;

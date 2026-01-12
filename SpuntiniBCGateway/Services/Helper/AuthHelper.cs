@@ -116,6 +116,7 @@ public class AuthHelper
     {
         string token = await GetAccessTokenAsync(cancellationToken).ConfigureAwait(false);
         var client = new HttpClient();
+        client.Timeout = TimeSpan.FromSeconds(300);
         client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
         return client;
     }

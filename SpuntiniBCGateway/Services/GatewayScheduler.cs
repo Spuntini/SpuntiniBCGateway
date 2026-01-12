@@ -5,8 +5,8 @@ public class GatewayScheduler
 {
     private readonly IConfiguration _config;
     private readonly EventLog _logger;
-    private List<ScheduleEntry> _schedules = new();
-    private Dictionary<string, DateTime> _lastExecutionTimes = new();
+    private List<ScheduleEntry> _schedules = [];
+    private Dictionary<string, DateTime> _lastExecutionTimes = [];
     private string _scheduleFilePath = string.Empty;
 
     public GatewayScheduler(IConfiguration config, EventLog logger)
@@ -66,6 +66,9 @@ public class GatewayScheduler
                     LastRan = LoadLastRanTime(scheduleElement),
                     LastChecked = LoadLastCheckedTime(scheduleElement)
                 };
+
+                if (entry.RepeatPattern.Equals("once", StringComparison.InvariantCultureIgnoreCase) && entry.LastRan != null)
+                    _lastExecutionTimes.Add(entry.Id, (DateTime)entry.LastRan);
 
                 if (!string.IsNullOrWhiteSpace(entry.Company) && !string.IsNullOrWhiteSpace(entry.Mode))
                 {
@@ -406,7 +409,7 @@ public class GatewayScheduler
         public string RepeatPattern { get; set; } = "once"; // once, minutes, daily, hourly, weekly, monthly
         public int RepeatEveryHours { get; set; } = 0; // For hourly pattern: repeat every X hours
         public int RepeatEveryMinutes { get; set; } = 0; // For minutes pattern: repeat every X minutes
-        public List<DayOfWeek> Weekdays { get; set; } = new(); // For weekly scheduling: specific weekdays
+        public List<DayOfWeek> Weekdays { get; set; } = []; // For weekly scheduling: specific weekdays
         public DateTime? LastRan { get; set; } // Last execution timestamp
         public DateTime? LastChecked { get; set; } // Last time scheduler checked if this task needed to run
     }

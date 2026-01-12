@@ -64,7 +64,7 @@ public static class DimensionBCRequest
 
                 if (!string.IsNullOrWhiteSpace(filter))
                 {
-                    var getUrl = collectionUrl + "?$filter=" + Uri.EscapeDataString(filter);
+                    var getUrl = collectionUrl + "?$filter=" + filter;
 
                     result = (await BcRequest.GetBcDataAsync(client, getUrl, "no", EventLog.GetMethodName(), logger, company, authHelper, cancellationToken)).FirstOrDefault().Value;
 
@@ -143,7 +143,7 @@ public static class DimensionBCRequest
             ArgumentNullException.ThrowIfNull(company);
             ArgumentNullException.ThrowIfNull(allItemData);
 
-            bool useDefaultDimensions = bool.TryParse(config[$"Companies:{company}:ItemData:UseDefaultDimension"], out var dimensions) ? dimensions : false;
+            bool useDefaultDimensions = bool.TryParse(config[$"Companies:{company}:ItemData:UseDefaultDimensions"], out var dimensions) ? dimensions : false;
 
             if (!useDefaultDimensions)
             {
@@ -154,10 +154,7 @@ public static class DimensionBCRequest
                 return null;
             }
 
-            string collectionUrl = config[$"Companies:{company}:ItemData:DestinationApiUrl"] ?? throw new ArgumentException($"Companies:{company}:ItemData:DestinationApiUrl required in config");
             string dimensionCollectionUrl = config[$"Companies:{company}:DimensionData:DestinationApiUrl"] ?? throw new ArgumentException($"Companies:{company}:DimensionData:DestinationApiUrl required in config");
-
-            string? systemId = null;
             string? no = null;
             string? defaultDimensions = null;
             HttpResponseMessage? responseMessage = null;
@@ -166,28 +163,85 @@ public static class DimensionBCRequest
             {
                 foreach (var itemResult in allItemData.Values)
                 {
-                    systemId = null;
                     no = null;
                     defaultDimensions = null;
 
+                    if (!itemResult.TryGetValue("no", out no) || string.IsNullOrWhiteSpace(no)) continue;
+
                     // DIMENSION MAY NOT EXIST!
                     itemResult.TryGetValue("defaultDimensions", out defaultDimensions);
-                    if (!(defaultDimensions is null || string.IsNullOrWhiteSpace(defaultDimensions) || "[]".Equals(defaultDimensions, StringComparison.InvariantCultureIgnoreCase)))
-                        continue;
-
-                    itemResult.TryGetValue("systemId", out systemId);
-                    itemResult.TryGetValue("no", out no);
-
-                    if (string.IsNullOrWhiteSpace(no)) continue;
 
                     var dimension = GetItemCogsDimension(config, company, no);
 
+                    string? existingId = null;
+                    string? etag = null;
+
+                    if (!(defaultDimensions is null || string.IsNullOrWhiteSpace(defaultDimensions) || "[]".Equals(defaultDimensions, StringComparison.InvariantCultureIgnoreCase)))
+                    {
+                        var data = JsonHelper.GetDataFromJsonString(defaultDimensions, "systemId");
+
+                        string skipMessage = "";
+                        if (data != null)
+                        {
+                            foreach (var value in data.Values)
+                            {
+                                if (value.TryGetValue("dimensionCode", out var code) && dimension.TryGetValue("dimensionCode", out object? dimensionCode)
+                                    && !string.IsNullOrWhiteSpace(code) && !string.IsNullOrWhiteSpace(dimensionCode?.ToString()) && string.Equals(code, dimensionCode.ToString(), StringComparison.InvariantCultureIgnoreCase))
+                                {
+                                    if (value.TryGetValue("dimensionValueCode", out var valueCode) && dimension.TryGetValue("dimensionValueCode", out var dimensionValueCode)
+                                        && !string.IsNullOrWhiteSpace(valueCode) && !string.IsNullOrWhiteSpace(dimensionValueCode?.ToString()))
+                                    {
+                                        if (string.Equals(valueCode, dimensionValueCode.ToString(), StringComparison.InvariantCultureIgnoreCase))
+                                        {
+                                            skipMessage = $"Dimension already exists for for item {no}.";
+                                        }
+                                        else
+                                        {
+                                            value.TryGetValue("systemId", out existingId);
+                                            value.TryGetValue("@odata.etag", out etag);
+                                        }
+
+                                        break;
+                                    }
+                                    else
+                                    {
+                                        value.TryGetValue("systemId", out existingId);
+                                        value.TryGetValue("@odata.etag", out etag);
+                                    }
+
+                                    break;
+                                }
+                                else
+                                {
+                                    // If the dimension code is different there is possible problem ==> so we skip it
+                                    skipMessage = $"Found dimension {code} instead already exists for for item {no}.";
+                                    break;
+                                }
+                            }
+                        }
+
+                        if (!string.IsNullOrWhiteSpace(skipMessage))
+                        {
+                            if (logger != null) await logger.InfoAsync(EventLog.GetMethodName(), company, skipMessage);
+
+                            continue;
+                        }
+                    }
+
                     var json = JsonSerializer.Serialize(dimension, new JsonSerializerOptions { WriteIndented = false });
 
-                    if (!string.IsNullOrWhiteSpace(systemId))
+                    if (string.IsNullOrWhiteSpace(existingId))
                     {
                         responseMessage = await BcRequest.PostBcDataAsync(client, dimensionCollectionUrl, json,
                             $"Dimension created for item {no} successfully.", $"Failed to create dimensions for item {no}. Json: {json}", EventLog.GetMethodName(), logger, company, authHelper, cancellationToken);
+                    }
+                    else
+                    {
+                        // Update: PATCH to items({id})
+                        var updateUrl = $"{dimensionCollectionUrl}({existingId})";
+
+                        responseMessage = await BcRequest.PatchBcDataAsync(client, updateUrl, json, etag ?? "*",
+                            $"Dimension for item {no} updated successfully.", $"Failed to update item dimension {no}. Json: {json}", EventLog.GetMethodName(), logger, company, authHelper, cancellationToken);
                     }
                 }
             }
@@ -230,12 +284,12 @@ public static class DimensionBCRequest
             tableId = 27;
 
         return new Dictionary<string, object>
-                    {
-                        {"dimensionCode", dimensionCode},
-                        {"dimensionValueCode", dimensionValueCode},
-                        {"no", itemCode},
-                        {"tableID", tableId},
-                        {"valuePosting", valuePosting},
-                    };
+            {
+                {"dimensionCode", dimensionCode},
+                {"dimensionValueCode", dimensionValueCode},
+                {"no", itemCode},
+                {"tableID", tableId},
+                {"valuePosting", valuePosting},
+            };
     }
 }

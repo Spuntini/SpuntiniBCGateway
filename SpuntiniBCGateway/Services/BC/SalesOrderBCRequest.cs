@@ -45,7 +45,7 @@ public static class SalesOrderBCRequest
                 orderResult.TryGetValue("systemId", out existingId);
                 orderResult.TryGetValue("@odata.etag", out etag);
                 orderResult.TryGetValue("status", out status);                
-                orderResult.TryGetValue("orderDate", out date);                
+                orderResult.TryGetValue("postingDate", out date);                
             }
 
             if (!string.IsNullOrWhiteSpace(existingId))
@@ -58,8 +58,8 @@ public static class SalesOrderBCRequest
             }
             else
             {
-                if (root.TryGetProperty("orderDate", out var orderDate) && orderDate.ValueKind == JsonValueKind.String)
-                    date = orderDate.GetString();
+                if (root.TryGetProperty("postingDate", out var postingDate) && postingDate.ValueKind == JsonValueKind.String)
+                    date = postingDate.GetString();
 
                 // CREATE SALES ORDER
                 var responseMessage = await BcRequest.PostBcDataAsync(client, createUrl + "?$expand=salesOrderLines", salesOrderJson,
