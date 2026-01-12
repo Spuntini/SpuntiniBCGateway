@@ -1,0 +1,14 @@
+# IDE
+.vs/
+.vscode/
+*.user
+*.sln.iml
+
+# Build results
+bin/
+obj/
+*.dll
+*.exe
+
+# Configuration files with secrets
+**/auth.json
