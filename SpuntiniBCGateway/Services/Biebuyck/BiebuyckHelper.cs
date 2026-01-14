@@ -76,7 +76,7 @@ public partial class BiebuyckHelper
             return null;
 
         // Try parsing DD-MM-YYYY format (common in Dutch systems)
-        if (DateTime.TryParseExact(dateStr, "dd-MM-yyyy", System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var dt))
+        if (DateTime.TryParseExact(dateStr, "dd-MM-yyyy", CultureInfo.InvariantCulture, DateTimeStyles.None, out var dt))
             return dt;
 
         // Try other common formats
@@ -92,7 +92,7 @@ public partial class BiebuyckHelper
             return null;
 
         // Try parsing DD-MM-YYYY format (common in Dutch systems)
-        if (DateTime.TryParseExact(dateStr, "dd-MM-yyyy", System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var dt))
+        if (DateTime.TryParseExact(dateStr, "dd-MM-yyyy", CultureInfo.InvariantCulture, DateTimeStyles.None, out var dt))
             return dt.ToString("yyyy-MM-dd");
 
         // Try other common formats

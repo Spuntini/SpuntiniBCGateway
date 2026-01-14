@@ -15,7 +15,7 @@ public static class BellaSiciliaSalesCreditNoteToBcRequest
 
         ArgumentNullException.ThrowIfNull(peppolDocument);
 
-        string json = await ConvertPeppolToSalesCreditMemoJsonAsync(config, company, peppolDocument, allItemData, allCustomerData, unitOfMeasuresDictionary, logger);
+        string json = await ConvertPeppolToSalesCreditMemoJsonAsync(client, config, company, peppolDocument, allItemData, allCustomerData, unitOfMeasuresDictionary, logger, authHelper, cancellationToken);
 
         // Create or update sales credit memo in BC
         return await SalesCreditNoteBCRequest.UpsertSalesCreditNoteAsync(client, config, company, json, peppolDocument.Header.Attachment, logger, authHelper, cancellationToken);
@@ -24,8 +24,8 @@ public static class BellaSiciliaSalesCreditNoteToBcRequest
     /// <summary>
     /// Converts a Peppol client credit note document to a Business Central sales credit memo JSON representation
     /// </summary>
-    public static async Task<string> ConvertPeppolToSalesCreditMemoJsonAsync(IConfigurationRoot config, string? company = null, PeppolDocument? peppolDocument = null, Dictionary<string, Dictionary<string, string>>? allItemData = null,
-        Dictionary<string, Dictionary<string, string>>? allCustomerData = null, Dictionary<string, string>? unitOfMeasuresDictionary = null, EventLog? logger = null)
+    public static async Task<string> ConvertPeppolToSalesCreditMemoJsonAsync(HttpClient client, IConfigurationRoot config, string? company = null, PeppolDocument? peppolDocument = null, Dictionary<string, Dictionary<string, string>>? allItemData = null,
+        Dictionary<string, Dictionary<string, string>>? allCustomerData = null, Dictionary<string, string>? unitOfMeasuresDictionary = null, EventLog? logger = null, AuthHelper? authHelper = null, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(company) || !company.StartsWith("BELLA", StringComparison.OrdinalIgnoreCase))
             ArgumentException.ThrowIfNullOrEmpty(company, "This method is only for company 'BELLA SICILIA'");
@@ -114,7 +114,6 @@ public static class BellaSiciliaSalesCreditNoteToBcRequest
             ["postingNo"] = header.DocumentId,
             ["orderDate"] = header.IssueDate ?? "",
             ["postingDate"] = header.IssueDate ?? "",
-            ["currencyCode"] = header.CurrencyCode,
             ["locationCode"] = locationCode,
 
             // Map customer (buyer) information
@@ -122,19 +121,9 @@ public static class BellaSiciliaSalesCreditNoteToBcRequest
             ["sellToCustomerNo"] = customerNo
         };
 
-        // Reference to original invoice if provided
-        // if (!string.IsNullOrWhiteSpace(header.RelatedDocumentId))
-        // {
-        //     creditMemo["appliestoDocNo"] = header.RelatedDocumentId;
-        //     creditMemo["appliestoDocType"] = "Invoice";
-        // }
-
-        // // Map totals (credit notes typically have negative amounts)
-        // creditMemo["totalAmountExcludingTax"] = header.TaxExclusiveAmount;
-        // creditMemo["totalTaxAmount"] = header.TaxTotals.Sum(t => t.TaxAmount);
-        // creditMemo["totalAmountIncludingTax"] = header.TaxInclusiveAmount;
-
         // Map credit memo lines
+        List<string> unknowItemList = [];
+
         var creditLines = new List<object>();
         for (int lineIndex = 0; lineIndex < peppolDocument.DocumentLines.Count; lineIndex++)
         {
@@ -143,6 +132,40 @@ public static class BellaSiciliaSalesCreditNoteToBcRequest
             var itemNo = BellaSiciliaHelper.GetBcItemNumberFromBellaSiciliaItemNumber(config, company, peppolLine.ItemCode ?? string.Empty) ?? string.Empty;
 
             if (!allItemData.TryGetValue(itemNo, out var itemData))
+            {
+                try
+                {
+                    if (!itemNo.StartsWith("A", StringComparison.InvariantCultureIgnoreCase))
+                    {
+                        await BellaSiciliaItemsExcelToBCRequest.GetItemListAsync(client, config, company, [itemNo], logger, authHelper, cancellationToken);
+                    }
+
+                    string escaped = itemNo.Replace("'", "''");
+                    var filter = $"no eq '{escaped}'";
+
+                    string collectionUrl = config[$"Companies:{company}:ItemData:DestinationApiUrl"] ?? throw new ArgumentException($"Companies:{company}:ItemData:DestinationApiUrl required in config");
+
+                    string getUrl = collectionUrl + "?$filter=" + filter + "&$expand=itemUnitOfMeasures";
+                    itemData = (await BcRequest.GetBcDataAsync(client, getUrl, "no", EventLog.GetMethodName(), logger, company, authHelper, cancellationToken)).FirstOrDefault().Value;
+
+                    allItemData[itemNo] = itemData;
+                }
+                catch (Exception)
+                {
+                    if (unknowItemList.Contains(itemNo))
+                    {
+                        logger?.WarningAsync(EventLog.GetMethodName(), company, $"Item {itemNo} not found in file, but already flagged").Wait();
+                        continue;
+                    }
+
+                    unknowItemList.Add(itemNo);
+
+                    if (logger != null) await logger.ErrorAsync(EventLog.GetMethodName(), company, new Exception($"Item {itemNo} unknown for document {header.DocumentId}"));
+                    break;
+                }
+            }
+
+            if (!allItemData.TryGetValue(itemNo, out itemData))
             {
                 throw new Exception($"Item with id {itemNo} not found");
             }
@@ -156,7 +179,7 @@ public static class BellaSiciliaSalesCreditNoteToBcRequest
                 { "no", itemNo },
                 { "description", peppolLine.ItemName },
                 { "quantity", peppolLine.Quantity }, // Negative for credit notes
-                { "unitOfMeasureCode", uom ?? string.Empty },
+                { "unitOfMeasureCode", uom ?? "STUKS" },
                 { "lineDiscount", 0},
                 { "unitPrice", peppolLine.UnitPrice },
                 { "documentType", "Credit_x0020_Memo" },

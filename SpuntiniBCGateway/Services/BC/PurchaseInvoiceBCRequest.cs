@@ -29,6 +29,8 @@ public static class PurchaseInvoiceBCRequest
             string? etag = null;
             string? date = null;
             string? status = "Draft";
+            
+            string? documentAttachments = null;
             Dictionary<string, string>? orderResult = null;
 
             if (string.IsNullOrWhiteSpace(docNum))
@@ -45,6 +47,7 @@ public static class PurchaseInvoiceBCRequest
                 orderResult.TryGetValue("@odata.etag", out etag);
                 orderResult.TryGetValue("status", out status);                
                 orderResult.TryGetValue("postingDate", out date);                
+                orderResult.TryGetValue("documentAttachments", out documentAttachments);                
             }
 
             if (!string.IsNullOrWhiteSpace(existingId))
@@ -59,7 +62,7 @@ public static class PurchaseInvoiceBCRequest
 
                 // CREATE SALES INVOICE
                 var responseMessage = await BcRequest.PostBcDataAsync(client, collectionUrl + "?$expand=purchaseInvoiceLines", purchaseInvoiceJson,
-                $"Purchase invoice {docNum} - {date} created successfully.", $"Failed to create purchase invoice {docNum}. Json: {purchaseInvoiceJson}", EventLog.GetMethodName(), logger, company, authHelper, cancellationToken);
+                $"Purchase invoice {docNum} - {date} created successfully.", $"Failed to create purchase invoice {docNum}. Json: {purchaseInvoiceJson}", EventLog.GetMethodName(), "", logger, company, authHelper, cancellationToken);
 
                 if (!responseMessage.IsSuccessStatusCode)
                     return new HttpResponseMessage(System.Net.HttpStatusCode.OK);;
@@ -75,14 +78,30 @@ public static class PurchaseInvoiceBCRequest
 
             if (attachment != null)
             {                
-                string attachmentUrl = $"{collectionUrl}({existingId})/attachments";
-                await BcRequest.AttachFile(client, attachment, attachmentUrl, $"Attachment to purchase invoice {docNum} - {date} added successfully.", $"Failed to add attachment to purchase invoice {docNum}.",
-                EventLog.GetMethodName(), logger, company, authHelper, cancellationToken) ;   
+                List<JsonElement>? attachmentList = JsonHelper.GetItemsSafe(documentAttachments ?? "[]");
+                if (attachmentList == null || attachmentList.Count <= 0)
+                {
+                    var documentAttachmentsData = new Dictionary<string, object>() {
+                       { "parentId", existingId ?? ""},
+                       { "fileName", attachment.FileName },
+                       { "parentType", "Purchase Invoice" }
+                    };
 
-                orderResult = (await BcRequest.GetBcDataAsync(client, getUrl, "no", EventLog.GetMethodName(), logger, company, authHelper, cancellationToken)).FirstOrDefault().Value ?? throw new ArgumentException($"Sales invoice {docNum} not found after creation");
+                    var documentAttachmentJson = JsonSerializer.Serialize(documentAttachmentsData, new JsonSerializerOptions
+                    {
+                        WriteIndented = false,
+                        Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+                    });
 
-                orderResult.TryGetValue("systemId", out existingId);
-                orderResult.TryGetValue("@odata.etag", out etag);       
+                    var response = await DocumentAttachmentsBCRequest.UpsertDocumentAttachmentsAsync(client, config, company, documentAttachmentJson, attachment, logger, authHelper, cancellationToken);
+                    if (response == null || !response.IsSuccessStatusCode)
+                        throw new ArgumentException($"Failed to upsert document attachment for purchase invoice {docNum}. Status code: {response?.StatusCode}");
+
+                    orderResult = (await BcRequest.GetBcDataAsync(client, getUrl, "no", EventLog.GetMethodName(), logger, company, authHelper, cancellationToken)).FirstOrDefault().Value ?? throw new ArgumentException($"Purchase invoice {docNum} not found after creation");
+
+                    orderResult.TryGetValue("systemId", out existingId);
+                    orderResult.TryGetValue("@odata.etag", out etag);
+                }
             }
 
             return new HttpResponseMessage(System.Net.HttpStatusCode.OK);;
@@ -99,7 +118,10 @@ public static class PurchaseInvoiceBCRequest
         {
             if (logger != null) await logger.ErrorAsync(MethodBase.GetCurrentMethod()?.Name, company, ex);
 
-            throw;
+            return new HttpResponseMessage(System.Net.HttpStatusCode.InternalServerError)
+            {
+                ReasonPhrase = ex.Message
+            };
         }
     }
 
@@ -142,13 +164,16 @@ public static class PurchaseInvoiceBCRequest
             actionUrl = actionUrl.Replace("{purchaseInvoiceId}", purchaseInvoice);
 
             return await BcRequest.PostBcDataAsync(client, actionUrl, "",
-                $"Purchase invoice {purchaseInvoice} {action} successfully.", $"Failed to {action} purchase invoice {purchaseInvoice}.", EventLog.GetMethodName(), logger, company, authHelper, cancellationToken);
+                $"Purchase invoice {purchaseInvoice} {action} successfully.", $"Failed to {action} purchase invoice {purchaseInvoice}.", EventLog.GetMethodName(), "", logger, company, authHelper, cancellationToken);
         }
         catch (Exception ex)
         {
             if (logger != null) await logger.ErrorAsync(MethodBase.GetCurrentMethod()?.Name, company, ex);
 
-            throw;
+            return new HttpResponseMessage(System.Net.HttpStatusCode.InternalServerError)
+            {
+                ReasonPhrase = ex.Message
+            };
         }
     }
 }

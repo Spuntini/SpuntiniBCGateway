@@ -15,7 +15,7 @@ public static class BellaSiciliaSalesInvoiceToBcRequest
 
         ArgumentNullException.ThrowIfNull(peppolDocument);
 
-        string json = await ConvertPeppolToSalesInvoiceJsonAsync(config, company, peppolDocument, allItemData, allCustomerData, unitOfMeasuresDictionary);
+        string json = await ConvertPeppolToSalesInvoiceJsonAsync(client, config, company, peppolDocument, allItemData, allCustomerData, unitOfMeasuresDictionary);
 
         // Create or update sales order in BC
         return await SalesInvoiceBCRequest.UpsertSalesInvoiceAsync(client, config, company, json, peppolDocument.Header.Attachment, logger, authHelper, cancellationToken);
@@ -24,8 +24,8 @@ public static class BellaSiciliaSalesInvoiceToBcRequest
     /// <summary>
     /// Converts a Peppol client invoice document to a Business Central sales order JSON representation
     /// </summary>
-    public static async Task<string> ConvertPeppolToSalesInvoiceJsonAsync(IConfigurationRoot config, string? company = null, PeppolDocument? peppolDocument = null, Dictionary<string, Dictionary<string, string>>? allItemData = null,
-    Dictionary<string, Dictionary<string, string>>? allCustomerData = null, Dictionary<string, string>? unitOfMeasuresDictionary = null)
+    public static async Task<string> ConvertPeppolToSalesInvoiceJsonAsync(HttpClient client, IConfigurationRoot config, string? company = null, PeppolDocument? peppolDocument = null, Dictionary<string, Dictionary<string, string>>? allItemData = null,
+    Dictionary<string, Dictionary<string, string>>? allCustomerData = null, Dictionary<string, string>? unitOfMeasuresDictionary = null, EventLog? logger = null, AuthHelper? authHelper = null, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(company) || !company.StartsWith("BELLA", StringComparison.OrdinalIgnoreCase))
             ArgumentException.ThrowIfNullOrEmpty(company, "This method is only for company 'BELLA SICILIA'");
@@ -136,6 +136,8 @@ public static class BellaSiciliaSalesInvoiceToBcRequest
             document["shipToCountryRegionCode"] = deliveryAddr.CountryCode ?? "BE";
         }
 
+        List<string> unknowItemList = [];
+
         // Map sales lines
         var documentLines = new List<object>();
         for (int lineIndex = 0; lineIndex < peppolDocument.DocumentLines.Count; lineIndex++)
@@ -149,6 +151,40 @@ public static class BellaSiciliaSalesInvoiceToBcRequest
             if (!string.IsNullOrWhiteSpace(itemNo))
             {
                 if (!allItemData.TryGetValue(itemNo, out var itemData))
+                {
+                    try
+                    {
+                        if (!itemNo.StartsWith("A", StringComparison.InvariantCultureIgnoreCase))
+                        {
+                            await BellaSiciliaItemsExcelToBCRequest.GetItemListAsync(client, config, company, [itemNo], logger, authHelper, cancellationToken);
+                        }
+
+                        string escaped = itemNo.Replace("'", "''");
+                        var filter = $"no eq '{escaped}'";
+
+                        string collectionUrl = config[$"Companies:{company}:ItemData:DestinationApiUrl"] ?? throw new ArgumentException($"Companies:{company}:ItemData:DestinationApiUrl required in config");
+
+                        string getUrl = collectionUrl + "?$filter=" + filter + "&$expand=itemUnitOfMeasures";
+                        itemData = (await BcRequest.GetBcDataAsync(client, getUrl, "no", EventLog.GetMethodName(), logger, company, authHelper, cancellationToken)).FirstOrDefault().Value;
+
+                        allItemData[itemNo] = itemData;
+                    }
+                    catch (Exception)
+                    {
+                        if (unknowItemList.Contains(itemNo))
+                        {
+                            logger?.WarningAsync(EventLog.GetMethodName(), company, $"Item {itemNo} not found in file, but already flagged").Wait();
+                            continue;
+                        }
+
+                        unknowItemList.Add(itemNo);
+
+                        if (logger != null) await logger.ErrorAsync(EventLog.GetMethodName(), company, new Exception($"Item {itemNo} unknown for document {header.DocumentId}"));
+                        break;
+                    }
+                }
+
+                if (!allItemData.TryGetValue(itemNo, out itemData))
                 {
                     throw new Exception($"Item with id {itemNo} not found");
                 }
@@ -195,10 +231,10 @@ public static class BellaSiciliaSalesInvoiceToBcRequest
         document["salesLines"] = documentLines;
 
         // Add default BC values from configuration
-    //    document["documentSendingProfile"] = config[$"Companies:{company}:SalesInvoiceData:DocumentSendingProfileDefault"] ?? string.Empty;
-    //    document["paymentTermsCode"] = config[$"Companies:{company}:SalesInvoiceData:PaymentTermsCodeDefault"] ?? string.Empty;
+        //    document["documentSendingProfile"] = config[$"Companies:{company}:SalesInvoiceData:DocumentSendingProfileDefault"] ?? string.Empty;
+        //    document["paymentTermsCode"] = config[$"Companies:{company}:SalesInvoiceData:PaymentTermsCodeDefault"] ?? string.Empty;
 
         // Serialize to JSON
         return JsonSerializer.Serialize(document, new JsonSerializerOptions { WriteIndented = false });
-    }    
+    }
 }

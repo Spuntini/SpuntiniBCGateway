@@ -45,17 +45,17 @@ public class JsonHelper
         return jsonString;
     }
 
-    internal static async Task<bool> IsPatchRequiredAsync(Dictionary<string, string>? existingData, string? jsonString, string[]? fieldsToExclude = null,
+    internal static async Task<string?> IsPatchRequiredAsync(Dictionary<string, string>? existingData, string? jsonString, string[]? fieldsToExclude = null,
         Dictionary<string, List<string>>? fieldExistingValuesToExclude = null, EventLog? logger = null, string company = "")
     {
         if (string.IsNullOrWhiteSpace(jsonString) || existingData == null || existingData.Count == 0)
-            return false;
+            return null;
 
         try
         {
             // Deserialize into a dictionary of JsonElement so we preserve types
             var map = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(jsonString);
-            if (map == null) return false;
+            if (map == null) return null;
 
             foreach (var kvp in map)
             {
@@ -72,11 +72,11 @@ public class JsonHelper
                     string newValue = kvp.Value.ToString() ?? "";
 
                     if (!string.Equals(existingValue, newValue, StringComparison.OrdinalIgnoreCase))
-                        return true;
+                        return kvp.Key;
                 }
                 else
                 {
-                    return true;
+                    return kvp.Key;
                 }
             }
         }
@@ -86,7 +86,7 @@ public class JsonHelper
             if (logger != null) await logger.ErrorAsync(EventLog.GetMethodName(), company, ex);
         }
 
-        return false;
+        return null;
     }
 
 

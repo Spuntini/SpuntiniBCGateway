@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("SpuntiniBCGateway")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Release")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+79fbe38326afdee27a46522e82e82be212754d65")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+62ff561187e87721c4a9330d80a8210db4596e8a")]
 [assembly: System.Reflection.AssemblyProductAttribute("SpuntiniBCGateway")]
 [assembly: System.Reflection.AssemblyTitleAttribute("SpuntiniBCGateway")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

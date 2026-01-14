@@ -56,7 +56,7 @@
             Transforms Peppol client credit notes to Business Central sales credit memos for Bella Sicilia
             </summary>
         </member>
-        <member name="M:SpuntiniBCGateway.Services.BellaSiciliaSalesCreditNoteToBcRequest.ConvertPeppolToSalesCreditMemoJsonAsync(Microsoft.Extensions.Configuration.IConfigurationRoot,System.String,SpuntiniBCGateway.Services.PeppolDocument,System.Collections.Generic.Dictionary{System.String,System.Collections.Generic.Dictionary{System.String,System.String}},System.Collections.Generic.Dictionary{System.String,System.Collections.Generic.Dictionary{System.String,System.String}},System.Collections.Generic.Dictionary{System.String,System.String},SpuntiniBCGateway.Services.EventLog)">
+        <member name="M:SpuntiniBCGateway.Services.BellaSiciliaSalesCreditNoteToBcRequest.ConvertPeppolToSalesCreditMemoJsonAsync(System.Net.Http.HttpClient,Microsoft.Extensions.Configuration.IConfigurationRoot,System.String,SpuntiniBCGateway.Services.PeppolDocument,System.Collections.Generic.Dictionary{System.String,System.Collections.Generic.Dictionary{System.String,System.String}},System.Collections.Generic.Dictionary{System.String,System.Collections.Generic.Dictionary{System.String,System.String}},System.Collections.Generic.Dictionary{System.String,System.String},SpuntiniBCGateway.Services.EventLog,SpuntiniBCGateway.Services.AuthHelper,System.Threading.CancellationToken)">
             <summary>
             Converts a Peppol client credit note document to a Business Central sales credit memo JSON representation
             </summary>
@@ -66,7 +66,7 @@
             Transforms Peppol client invoices to Business Central sales orders for Bella Sicilia
             </summary>
         </member>
-        <member name="M:SpuntiniBCGateway.Services.BellaSiciliaSalesInvoiceToBcRequest.ConvertPeppolToSalesInvoiceJsonAsync(Microsoft.Extensions.Configuration.IConfigurationRoot,System.String,SpuntiniBCGateway.Services.PeppolDocument,System.Collections.Generic.Dictionary{System.String,System.Collections.Generic.Dictionary{System.String,System.String}},System.Collections.Generic.Dictionary{System.String,System.Collections.Generic.Dictionary{System.String,System.String}},System.Collections.Generic.Dictionary{System.String,System.String})">
+        <member name="M:SpuntiniBCGateway.Services.BellaSiciliaSalesInvoiceToBcRequest.ConvertPeppolToSalesInvoiceJsonAsync(System.Net.Http.HttpClient,Microsoft.Extensions.Configuration.IConfigurationRoot,System.String,SpuntiniBCGateway.Services.PeppolDocument,System.Collections.Generic.Dictionary{System.String,System.Collections.Generic.Dictionary{System.String,System.String}},System.Collections.Generic.Dictionary{System.String,System.Collections.Generic.Dictionary{System.String,System.String}},System.Collections.Generic.Dictionary{System.String,System.String},SpuntiniBCGateway.Services.EventLog,SpuntiniBCGateway.Services.AuthHelper,System.Threading.CancellationToken)">
             <summary>
             Converts a Peppol client invoice document to a Business Central sales order JSON representation
             </summary>

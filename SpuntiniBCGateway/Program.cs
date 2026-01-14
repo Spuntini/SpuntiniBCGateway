@@ -26,6 +26,7 @@ public class Program
                 string env = hostingContext.HostingEnvironment.EnvironmentName;
                 config.AddJsonFile("appsettings.json", optional: false, reloadOnChange: true);
                 config.AddJsonFile($"appsettings.{env}.json", optional: true, reloadOnChange: true);
+                config.AddJsonFile("auth.json", optional: true, reloadOnChange: true);
             })
             .ConfigureServices((hostContext, services) =>
             {

@@ -237,8 +237,8 @@ public static class BiebuyckPurchaseReceiptsCsvToBCRequest
                         { "blocked", "" }
                     });
 
-                await BcRequest.PatchBcDataAsync(httpClient, $"{supplierUrl}({existingId})", patchJson, etag ?? "*",
-                $"Supplier {vendorNo} deblocked successfully.", $"Failed to deblock supplier {vendorNo}. Json: {patchJson}", EventLog.GetMethodName(), logger, company, authHelper, cancellationToken);
+                await BcRequest.PatchBcDataAsync(client: httpClient, patchUrl: $"{supplierUrl}({existingId})", getUrl: $"{supplierUrl}?$filter=no eq '{vendorNo.Replace("'", "''")}'", keyValue: "no", json: patchJson, etag: etag ?? "*",
+                succesMessage: $"Supplier {vendorNo} deblocked successfully.", errorMessage: $"Failed to deblock supplier {vendorNo}. Json: {patchJson}", sourceMethod: EventLog.GetMethodName(), logger: logger, company: company, authHelper: authHelper, cancellationToken: cancellationToken);
 
                 supplierData["blocked"] = "";
             }

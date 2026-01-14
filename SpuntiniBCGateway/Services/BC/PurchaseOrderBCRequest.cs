@@ -74,14 +74,15 @@ public static class PurchaseOrderBCRequest
                         string json = JsonSerializer.Serialize(fieldsData, new JsonSerializerOptions { WriteIndented = false });
 
                         // Check if PATCH is required by comparing fields
-                        bool isPatchRequired = await JsonHelper.IsPatchRequiredAsync(orderResult, json, null, null, logger, company);
+                        var fieldToUpdate = await JsonHelper.IsPatchRequiredAsync(orderResult, json, null, null, logger, company) ?? string.Empty;
+                        bool isPatchRequired = !string.IsNullOrWhiteSpace(fieldToUpdate);
 
                         if (isPatchRequired)
                         {   
                             // Update: PATCH to items({id})
                             string updateUrl = $"{postAndPatchUrl}({existingId})";
 
-                            await BcRequest.PatchBcDataAsync(client, updateUrl, json, etag ?? "*",
+                            await BcRequest.PatchBcDataAsync(client, updateUrl, getUrl, "no", json, etag ?? "*",
                                 $"Purchase order {docNum} - {date} updated successfully.", $"Failed to update purchase order {docNum} - {date}. Json: {json}", EventLog.GetMethodName(), logger, company, authHelper, cancellationToken);
                             
                             orderResult = (await BcRequest.GetBcDataAsync(client, getUrl, "no", EventLog.GetMethodName(), logger, company, authHelper, cancellationToken)).FirstOrDefault().Value ?? throw new ArgumentException($"Purchase order {docNum} not found after creation");
@@ -99,7 +100,7 @@ public static class PurchaseOrderBCRequest
 
                 // CREATE Purchase ORDER
                 var responseMessage = await BcRequest.PostBcDataAsync(client, postAndPatchUrl + "?$expand=purchaseLines", purchaseOrderJson,
-                $"Purchase Order {docNum} - {date} created successfully.", $"Failed to create Purchase order {docNum} - {date}. Json: {purchaseOrderJson}", EventLog.GetMethodName(), logger, company, authHelper, cancellationToken);
+                $"Purchase Order {docNum} - {date} created successfully.", $"Failed to create Purchase order {docNum} - {date}. Json: {purchaseOrderJson}", EventLog.GetMethodName(), "", logger, company, authHelper, cancellationToken);
 
                 if (!responseMessage.IsSuccessStatusCode)
                     return responseMessage;
@@ -181,13 +182,16 @@ public static class PurchaseOrderBCRequest
             actionUrl = actionUrl.Replace("{purchaseOrderId}", purchaseOrder);
 
             return await BcRequest.PostBcDataAsync(client, actionUrl, "",
-                $"Purchase Order {purchaseOrder} {action} successfully.", $"Failed to {action} Purchase order {purchaseOrder}.", EventLog.GetMethodName(), logger, company, authHelper, cancellationToken);
+                $"Purchase Order {purchaseOrder} {action} successfully.", $"Failed to {action} Purchase order {purchaseOrder}.", EventLog.GetMethodName(), "", logger, company, authHelper, cancellationToken);
         }
         catch (Exception ex)
         {
             if (logger != null) await logger.ErrorAsync(MethodBase.GetCurrentMethod()?.Name, company, ex);
 
-            throw;
+            return new HttpResponseMessage(System.Net.HttpStatusCode.InternalServerError)
+            {
+                ReasonPhrase = ex.Message
+            };
         }
     }
 }

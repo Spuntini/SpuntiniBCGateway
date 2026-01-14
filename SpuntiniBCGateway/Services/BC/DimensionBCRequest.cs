@@ -33,85 +33,83 @@ public static class DimensionBCRequest
             string? existingId = null;
             string? etag = null;
 
-            if (!string.IsNullOrWhiteSpace(json))
+            // Parse provided JSON to extract number/no/gtin for existence check
+            using var doc = JsonDocument.Parse(json);
+            var root = doc.RootElement;
+            string? no = null;
+            string? gtin = null;
+
+            if (root.TryGetProperty("no", out var noProp) && noProp.ValueKind == JsonValueKind.String)
+                no = noProp.GetString();
+            if (root.TryGetProperty("gtin", out var gtinProp) && gtinProp.ValueKind == JsonValueKind.String)
+                gtin = gtinProp.GetString();
+
+            // Build filter expression: prefer number, then no, then gtin
+            string? filter = null;
+            if (!string.IsNullOrWhiteSpace(no))
             {
-                // Parse provided JSON to extract number/no/gtin for existence check
-                using var doc = JsonDocument.Parse(json);
-                var root = doc.RootElement;
-                string? no = null;
-                string? gtin = null;
+                var escaped = no.Replace("'", "''");
+                filter = $"no eq '{escaped}'";
+            }
+            else if (!string.IsNullOrWhiteSpace(gtin))
+            {
+                var escaped = gtin.Replace("'", "''");
+                filter = $"gtin eq '{escaped}'";
+            }
 
-                if (root.TryGetProperty("no", out var noProp) && noProp.ValueKind == JsonValueKind.String)
-                    no = noProp.GetString();
-                if (root.TryGetProperty("gtin", out var gtinProp) && gtinProp.ValueKind == JsonValueKind.String)
-                    gtin = gtinProp.GetString();
+            Dictionary<string, string>? result = [];
+            bool isPatchRequired = false;
+            var excludedFields = config.GetSection($"Companies:{company}:DimensionData:FieldsToExcludeFromUpdate").Get<string[]>();
+            string fieldToUpdate = string.Empty;
+            string getUrl = "";
 
-                // Build filter expression: prefer number, then no, then gtin
-                string? filter = null;
-                if (!string.IsNullOrWhiteSpace(no))
+            if (!string.IsNullOrWhiteSpace(filter))
+            {
+                getUrl = collectionUrl + "?$filter=" + filter;
+
+                result = (await BcRequest.GetBcDataAsync(client, getUrl, "no", EventLog.GetMethodName(), logger, company, authHelper, cancellationToken)).FirstOrDefault().Value;
+
+                if (result != null)
                 {
-                    var escaped = no.Replace("'", "''");
-                    filter = $"no eq '{escaped}'";
-                }
-                else if (!string.IsNullOrWhiteSpace(gtin))
-                {
-                    var escaped = gtin.Replace("'", "''");
-                    filter = $"gtin eq '{escaped}'";
-                }
-
-                Dictionary<string, string>? result = [];
-                bool isPatchRequired = false;
-
-                if (!string.IsNullOrWhiteSpace(filter))
-                {
-                    var getUrl = collectionUrl + "?$filter=" + filter;
-
-                    result = (await BcRequest.GetBcDataAsync(client, getUrl, "no", EventLog.GetMethodName(), logger, company, authHelper, cancellationToken)).FirstOrDefault().Value;
-
-                    if (result != null)
-                    {
-                        result.TryGetValue("systemId", out existingId);
-                        result.TryGetValue("@odata.etag", out etag);
-                    }
-
-                    if (!string.IsNullOrWhiteSpace(existingId))
-                    {
-                        // Check if PATCH is required by comparing fields
-                        isPatchRequired = await JsonHelper.IsPatchRequiredAsync(result, json, ["skipDuplicateCheck"], null, logger, company);
-                    }
+                    result.TryGetValue("systemId", out existingId);
+                    result.TryGetValue("@odata.etag", out etag);
                 }
 
                 if (!string.IsNullOrWhiteSpace(existingId))
                 {
-                    if (isPatchRequired)
-                    {
-                        // Update: PATCH to items({id})
-                        var updateUrl = $"{collectionUrl}({existingId})";
-
-                        // Remove excluded fields from JSON before PATCH
-                        var excludedFields = config.GetSection($"Companies:{company}:DimensionData:FieldsToExcludeFromUpdate").Get<string[]>();
-
-                        json = await JsonHelper.RemoveFieldsFromJsonAsync(json, excludedFields, logger, company);
-
-                        return await BcRequest.PatchBcDataAsync(client, updateUrl, json, etag ?? "*",
-                        $"Item {no} updated successfully.", $"Failed to update item {no}. Json: {json}", EventLog.GetMethodName(), logger, company, authHelper, cancellationToken);
-                    }
-
-                    stopwatch.Stop();
-                    if (logger != null) await logger.InfoAsync(EventLog.GetMethodName(), company, $"Duration: {StringHelper.GetDurationString(stopwatch.Elapsed)}. Item {no} already exists. No update required.");
-                    return new HttpResponseMessage(System.Net.HttpStatusCode.OK)
-                    {
-                        ReasonPhrase = $"Item {no} already exists. No update required."
-                    };
-                }
-                else
-                {
-                    return await BcRequest.PostBcDataAsync(client, collectionUrl, json,
-                    $"Item {no} created successfully.", $"Failed to create item {no}. Json: {json}", EventLog.GetMethodName(), logger, company, authHelper, cancellationToken);
+                    // Check if PATCH is required by comparing fields
+                    fieldToUpdate = await JsonHelper.IsPatchRequiredAsync(result, json, excludedFields, null, logger, company) ?? string.Empty;
+                    isPatchRequired = !string.IsNullOrWhiteSpace(fieldToUpdate);
                 }
             }
 
-            return null;
+            if (!string.IsNullOrWhiteSpace(existingId))
+            {
+                if (isPatchRequired)
+                {
+                    // Update: PATCH to items({id})
+                    var updateUrl = $"{collectionUrl}({existingId})";
+
+                    json = await JsonHelper.RemoveFieldsFromJsonAsync(json, excludedFields, logger, company);
+
+                    return await BcRequest.PatchBcDataAsync(client, updateUrl, getUrl, "no", json, etag ?? "*",
+                    $"Item {no} updated successfully.", $"Failed to update item {no}. Json: {json}", EventLog.GetMethodName(), logger, company, authHelper, cancellationToken);
+                }
+
+                stopwatch.Stop();
+                if (logger != null) await logger.InfoAsync(EventLog.GetMethodName(), company, $"Duration: {StringHelper.GetDurationString(stopwatch.Elapsed)}. Item {no} already exists. No update required.");
+                return new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+                {
+                    ReasonPhrase = $"Item {no} already exists. No update required."
+                };
+            }
+            else
+            {
+                return await BcRequest.PostBcDataAsync(client, collectionUrl, json,
+                $"Item {no} created successfully.", $"Failed to create item {no}. Json: {json}", EventLog.GetMethodName(), "", logger, company, authHelper, cancellationToken);
+            }
+
+
         }
         catch (Exception ex)
         {
@@ -233,14 +231,15 @@ public static class DimensionBCRequest
                     if (string.IsNullOrWhiteSpace(existingId))
                     {
                         responseMessage = await BcRequest.PostBcDataAsync(client, dimensionCollectionUrl, json,
-                            $"Dimension created for item {no} successfully.", $"Failed to create dimensions for item {no}. Json: {json}", EventLog.GetMethodName(), logger, company, authHelper, cancellationToken);
+                            $"Dimension created for item {no} successfully.", $"Failed to create dimensions for item {no}. Json: {json}", EventLog.GetMethodName(), "", logger, company, authHelper, cancellationToken);
                     }
                     else
                     {
                         // Update: PATCH to items({id})
                         var updateUrl = $"{dimensionCollectionUrl}({existingId})";
+                        var getUrl = dimensionCollectionUrl + "?$filter=" + Uri.EscapeDataString($"no eq '{no.Replace("'", "''")}'");
 
-                        responseMessage = await BcRequest.PatchBcDataAsync(client, updateUrl, json, etag ?? "*",
+                        responseMessage = await BcRequest.PatchBcDataAsync(client, updateUrl, getUrl, "no", json, etag ?? "*",
                             $"Dimension for item {no} updated successfully.", $"Failed to update item dimension {no}. Json: {json}", EventLog.GetMethodName(), logger, company, authHelper, cancellationToken);
                     }
                 }

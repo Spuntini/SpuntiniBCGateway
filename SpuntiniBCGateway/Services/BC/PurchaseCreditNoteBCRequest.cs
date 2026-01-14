@@ -30,6 +30,7 @@ public static class PurchaseCreditNoteBCRequest
             string? etag = null;
             string? date = null;
             string? status = "Draft";
+            string? documentAttachments = null;
             Dictionary<string, string>? orderResult = null;
 
             if (string.IsNullOrWhiteSpace(docNum))
@@ -46,12 +47,13 @@ public static class PurchaseCreditNoteBCRequest
                 orderResult.TryGetValue("@odata.etag", out etag);
                 orderResult.TryGetValue("status", out status);                
                 orderResult.TryGetValue("postingDate", out date);                
+                orderResult.TryGetValue("documentAttachments", out documentAttachments);                
             }
 
             if (!string.IsNullOrWhiteSpace(existingId))
             {                
                 if (logger != null) await logger.InfoAsync(EventLog.GetMethodName(), company, $"Purchase credit note {docNum} - {date} already exist.");
-                    return new HttpResponseMessage(System.Net.HttpStatusCode.OK);             
+                    return new HttpResponseMessage(HttpStatusCode.OK);             
             }
             else
             {
@@ -60,10 +62,10 @@ public static class PurchaseCreditNoteBCRequest
 
                 // CREATE SALES INVOICE
                 var responseMessage = await BcRequest.PostBcDataAsync(client, collectionUrl + "?$expand=purchaseCreditNoteLines", purchaseCreditNoteJson,
-                $"Purchase credit note {docNum} - {date} created successfully.", $"Failed to create purchase credit note {docNum}. Json: {purchaseCreditNoteJson}", EventLog.GetMethodName(), logger, company, authHelper, cancellationToken);
+                $"Purchase credit note {docNum} - {date} created successfully.", $"Failed to create purchase credit note {docNum}. Json: {purchaseCreditNoteJson}", EventLog.GetMethodName(), "", logger, company, authHelper, cancellationToken);
 
                 if (!responseMessage.IsSuccessStatusCode)
-                    return new HttpResponseMessage(System.Net.HttpStatusCode.OK);
+                    return new HttpResponseMessage(HttpStatusCode.OK);
 
                 orderResult = (await BcRequest.GetBcDataAsync(client, getUrl, "number", EventLog.GetMethodName(), logger, company, authHelper, cancellationToken)).FirstOrDefault().Value ?? throw new ArgumentException($"Purchase credit note {docNum} not found after creation");
 
@@ -76,17 +78,33 @@ public static class PurchaseCreditNoteBCRequest
 
             if (attachment != null)
             {                
-                string attachmentUrl = $"{collectionUrl}({existingId})/attachments";
-                await BcRequest.AttachFile(client, attachment, attachmentUrl, $"Attachment to purchase credit note {docNum} - {date} added successfully.", $"Failed to add attachment to purchase credit note {docNum}.",
-                EventLog.GetMethodName(), logger, company, authHelper, cancellationToken) ;    
+                List<JsonElement>? attachmentList = JsonHelper.GetItemsSafe(documentAttachments ?? "[]");
+                if (attachmentList == null || attachmentList.Count <= 0)
+                {
+                    var documentAttachmentsData = new Dictionary<string, object>() {
+                       { "parentId", existingId ?? ""},
+                       { "fileName", attachment.FileName },
+                       { "parentType", "Purchase Credit Memo" }
+                    };
 
-                orderResult = (await BcRequest.GetBcDataAsync(client, getUrl, "no", EventLog.GetMethodName(), logger, company, authHelper, cancellationToken)).FirstOrDefault().Value ?? throw new ArgumentException($"Sales invoice {docNum} not found after creation");
+                    var documentAttachmentJson = JsonSerializer.Serialize(documentAttachmentsData, new JsonSerializerOptions
+                    {
+                        WriteIndented = false,
+                        Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+                    });
 
-                orderResult.TryGetValue("systemId", out existingId);
-                orderResult.TryGetValue("@odata.etag", out etag);      
+                    var response = await DocumentAttachmentsBCRequest.UpsertDocumentAttachmentsAsync(client, config, company, documentAttachmentJson, attachment, logger, authHelper, cancellationToken);
+                    if (response == null || !response.IsSuccessStatusCode)
+                        throw new ArgumentException($"Failed to upsert document attachment for purchase credit note {docNum}. Status code: {response?.StatusCode}");
+
+                    orderResult = (await BcRequest.GetBcDataAsync(client, getUrl, "number", EventLog.GetMethodName(), logger, company, authHelper, cancellationToken)).FirstOrDefault().Value ?? throw new ArgumentException($"Purchase credit note {docNum} not found after creation");
+
+                    orderResult.TryGetValue("systemId", out existingId);
+                    orderResult.TryGetValue("@odata.etag", out etag);
+                }
             }
 
-            return new HttpResponseMessage(System.Net.HttpStatusCode.OK);
+            return new HttpResponseMessage(HttpStatusCode.OK);
             // if (orderResult.TryGetValue("amount", out var amountstr) && double.TryParse(amountstr, out var amount) && Math.Abs(amount) == 0)
             // {
             //     if (logger != null) await logger.InfoAsync(EventLog.GetMethodName(), company, $"Purchase order {docNum} has amount {amount}, no release performed.");
@@ -100,7 +118,10 @@ public static class PurchaseCreditNoteBCRequest
         {
             if (logger != null) await logger.ErrorAsync(MethodBase.GetCurrentMethod()?.Name, company, ex);
 
-            throw;
+            return new HttpResponseMessage(HttpStatusCode.InternalServerError)
+            {
+                ReasonPhrase = ex.Message
+            };
         }
     }
 
@@ -143,13 +164,16 @@ public static class PurchaseCreditNoteBCRequest
             actionUrl = actionUrl.Replace("{purchaseCreditNoteId}", purchaseCreditNote);
 
             return await BcRequest.PostBcDataAsync(client, actionUrl, "",
-                $"Purchase credit note {purchaseCreditNote} {action} successfully.", $"Failed to {action} purchase credit note {purchaseCreditNote}.", EventLog.GetMethodName(), logger, company, authHelper, cancellationToken);
+                $"Purchase credit note {purchaseCreditNote} {action} successfully.", $"Failed to {action} purchase credit note {purchaseCreditNote}.", EventLog.GetMethodName(), "", logger, company, authHelper, cancellationToken);
         }
         catch (Exception ex)
         {
             if (logger != null) await logger.ErrorAsync(MethodBase.GetCurrentMethod()?.Name, company, ex);
 
-            throw;
+            return new HttpResponseMessage(HttpStatusCode.InternalServerError)
+            {
+                ReasonPhrase = ex.Message
+            };
         }
     }
 }

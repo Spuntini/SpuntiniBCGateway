@@ -76,7 +76,7 @@ public static class BcRequest
         }
     }
 
-    public static async Task<HttpResponseMessage> PostBcDataAsync(HttpClient client, string postUrl, string json, string succesMessage = "Created successfully", string errorMessage = "Creation failed", string sourceMethod = "", EventLog? logger = null, string company = "", AuthHelper? authHelper = null, CancellationToken cancellationToken = default)
+    public static async Task<HttpResponseMessage> PostBcDataAsync(HttpClient client, string postUrl, string json, string succesMessage = "Created successfully", string errorMessage = "Creation failed", string sourceMethod = "", string? accept = null, EventLog? logger = null, string company = "", AuthHelper? authHelper = null, CancellationToken cancellationToken = default)
     {
         try
         {
@@ -89,6 +89,11 @@ public static class BcRequest
                 Content = new StringContent(json, Encoding.UTF8, "application/json")
             };
 
+            if (!string.IsNullOrWhiteSpace(accept))
+            {
+                request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue(accept));
+            }
+
             return await SendAsync(client, request, succesMessage, errorMessage, $"{sourceMethod}: POST", logger, company, authHelper, cancellationToken);
         }
         catch (Exception ex)
@@ -98,19 +103,41 @@ public static class BcRequest
         }
     }
 
-    public static async Task<HttpResponseMessage> PatchBcDataAsync(HttpClient client, string patchUrl, string? json, string etag, string succesMessage = "Patch successfully", string errorMessage = "Patch failed", string sourceMethod = "", EventLog? logger = null, string company = "", AuthHelper? authHelper = null, CancellationToken cancellationToken = default)
+    public static async Task<HttpResponseMessage> PatchBcDataAsync(HttpClient client, string patchUrl, string getUrl, string keyValue, string? json, string etag, string succesMessage = "Patch successfully", string errorMessage = "Patch failed", string sourceMethod = "", EventLog? logger = null, string company = "", AuthHelper? authHelper = null, CancellationToken cancellationToken = default)
     {
         try
         {
             ArgumentException.ThrowIfNullOrEmpty(json);
 
-            using var request = new HttpRequestMessage(new HttpMethod("PATCH"), patchUrl)
-            {
-                Content = new StringContent(json, Encoding.UTF8, "application/json"),
-                Headers = { { "If-Match", etag ?? "*" }, { "Prefer", "return=representation" } }
-            };
+            var maxRetryAttempts = 5;
+            var retryAttempts = 0;
 
-            return await SendAsync(client, request, succesMessage, errorMessage, $"{sourceMethod}: PATCH", logger, company, authHelper, cancellationToken);
+            while (true)
+            {
+                using var request = new HttpRequestMessage(HttpMethod.Patch, patchUrl)
+                {
+                    Content = new StringContent(json, Encoding.UTF8, "application/json"),
+                    Headers = { { "If-Match", etag ?? "*" }, { "Prefer", "return=representation" } }
+                };
+
+                var responseMessage = await SendAsync(client, request, succesMessage, errorMessage, $"{sourceMethod}: PATCH", logger, company, authHelper, cancellationToken);
+
+                if (responseMessage.StatusCode == System.Net.HttpStatusCode.Conflict &&
+                   responseMessage.RequestMessage != null &&
+                    responseMessage.RequestMessage.Method == HttpMethod.Patch)
+                {
+                    retryAttempts++;
+                    if (retryAttempts > maxRetryAttempts) return responseMessage;
+                   
+                    var result = (await GetBcDataAsync(client, getUrl, keyValue, EventLog.GetMethodName(), logger, company, authHelper, cancellationToken)).FirstOrDefault().Value;
+
+                    _ = result.TryGetValue("@odata.etag", out etag);     
+                }
+                else
+                {
+                    return responseMessage;
+                }
+            }
         }
         catch (Exception ex)
         {
@@ -126,7 +153,7 @@ public static class BcRequest
         {
             ArgumentException.ThrowIfNullOrEmpty(json);
 
-            using var request = new HttpRequestMessage(new HttpMethod("DELETE"), deleteUrl)
+            using var request = new HttpRequestMessage(HttpMethod.Delete, deleteUrl)
             {
                 Content = new StringContent(json, Encoding.UTF8, "application/json"),
                 Headers = { { "If-Match", etag ?? "*" }, { "Prefer", "return=representation" } }
@@ -141,65 +168,7 @@ public static class BcRequest
         }
     }
 
-    public static async Task<HttpResponseMessage> AttachFile(HttpClient client, Attachment? attachment, string attachUrl,
-        string succesMessage = "Attach successfully", string errorMessage = "Attach failed", string sourceMethod = "", EventLog? logger = null, string company = "", AuthHelper? authHelper = null, CancellationToken cancellationToken = default)
-    {
-        try
-        {
-            if (attachment == null || attachment?.FileContent.Length == 0) return new HttpResponseMessage(System.Net.HttpStatusCode.OK);
-
-            // Create multipart form data for file upload
-            using var content = new MultipartFormDataContent();
-            var provider = new Microsoft.AspNetCore.StaticFiles.FileExtensionContentTypeProvider();
-            if (!provider.TryGetContentType(attachment!.FileName , out var contentType))
-            {
-                contentType = "application/octet-stream"; // Default content type
-            }
-
-            string[] tempFilePart = attachment.FileName.Split('.').ToArray();
-            var fileName = "";
-            var fileExtension = "";
-            
-            if ( tempFilePart == null || tempFilePart.Length == 0)
-            {
-                fileName = "attachment";
-                fileExtension = "";
-            }
-            else if (tempFilePart.Length == 1)
-            {
-                fileName = tempFilePart[0];
-                fileExtension = "";
-            }
-            else
-            {
-                fileExtension = tempFilePart[^1];
-                fileName = string.Join('.', tempFilePart, 0, tempFilePart.Length - 1);
-            }
-
-            var payLoad = new
-            {
-                fileName = fileName,
-                fileExtension = fileExtension,
-                attachmentContent = Convert.ToBase64String(attachment!.FileContent)
-            };
-
-            var jsonPayload = JsonSerializer.Serialize(payLoad);
-
-            using var request = new HttpRequestMessage(HttpMethod.Post, attachUrl)
-            {
-                Content = new StringContent(jsonPayload, Encoding.UTF8, "application/json")
-            };
-
-            return await SendAsync(client, request, succesMessage, errorMessage, $"{sourceMethod}: AttachFile", logger, company, authHelper, cancellationToken);
-        }
-        catch (Exception ex)
-        {
-            if (logger != null) await logger.ErrorAsync(EventLog.GetMethodName(), company, ex);
-            return new HttpResponseMessage(System.Net.HttpStatusCode.InternalServerError) { ReasonPhrase = ex.Message };
-        }
-    }
-
-    private static async Task<HttpResponseMessage> SendAsync(HttpClient client, HttpRequestMessage request, string? succesMessage = null,
+    internal static async Task<HttpResponseMessage> SendAsync(HttpClient client, HttpRequestMessage request, string? succesMessage = null,
         string errorMessage = "Error occured", string sourceMethod = "", EventLog? logger = null, string company = "", AuthHelper? authHelper = null, CancellationToken cancellationToken = default)
     {
         var stopwatch = Stopwatch.StartNew();
@@ -234,7 +203,19 @@ public static class BcRequest
                     }
                 }
 
-                if (responseMessage.StatusCode == System.Net.HttpStatusCode.Conflict  || 
+                if (responseMessage.StatusCode == System.Net.HttpStatusCode.Conflict &&
+                    responseMessage.RequestMessage != null &&
+                    responseMessage.RequestMessage.Method == HttpMethod.Patch)
+                {
+                    // For PATCH requests, a 409 Conflict may indicate an etag mismatch
+                    string content = await responseMessage.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+                    if (content.Contains("Request_EntityChanged", StringComparison.OrdinalIgnoreCase))
+                    {
+                        return responseMessage;
+                    }
+                }
+
+                if (responseMessage.StatusCode == System.Net.HttpStatusCode.Conflict ||
                     responseMessage.StatusCode == System.Net.HttpStatusCode.ServiceUnavailable)
                 {
                     retryAttempts++;

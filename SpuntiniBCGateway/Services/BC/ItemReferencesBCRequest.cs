@@ -42,15 +42,15 @@ public static class ItemReferencesBCRequest
 
             Dictionary<string, string>? itemResult = [];
 
+            string escaped = itemNo.Replace("'", "''");
+            string filter = $"no eq '{escaped}'";
+
+            string getUrl = config[$"Companies:{company}:ItemData:DestinationApiUrl"] + "?$filter=" + filter + "&$expand=defaultDimensions,itemUnitOfMeasures,itemReferences";
+
             if (!allItemData.TryGetValue(itemNo, out itemResult) || itemResult is null)
             {
-                string escaped = itemNo.Replace("'", "''");
-                string filter = $"no eq '{escaped}'";
-
-                string itemUrl = config[$"Companies:{company}:ItemData:DestinationApiUrl"] + "?$filter=" + filter + "&$expand=defaultDimensions,itemUnitOfMeasures,itemReferences";
                 // POSSIBLY NEW ITEM
-
-                itemResult = (await BcRequest.GetBcDataAsync(client, itemUrl, "no", EventLog.GetMethodName(), logger, company, authHelper, cancellationToken)).FirstOrDefault().Value;
+                itemResult = (await BcRequest.GetBcDataAsync(client, getUrl, "no", EventLog.GetMethodName(), logger, company, authHelper, cancellationToken)).FirstOrDefault().Value;
                 allItemData[itemNo] = itemResult;
             }
 
@@ -63,6 +63,8 @@ public static class ItemReferencesBCRequest
             var itemReferencesList = JsonHelper.GetItemsSafe(itemReferences.ToString());
 
             Dictionary<string, Dictionary<string, string>>? currentItemReferenceData = null;
+            string[]? excludedFields = config.GetSection($"Companies:{company}:ItemReferenceData:FieldsToExcludeFromUpdate").Get<string[]>();
+            string fieldToUpdate = string.Empty;
 
             if (itemResult.TryGetValue("itemReferences", out var currentItemReferenceList))
                 currentItemReferenceData = JsonHelper.GetDataFromJsonString(currentItemReferenceList, "systemId");
@@ -122,13 +124,16 @@ public static class ItemReferencesBCRequest
 
                     if (!string.IsNullOrWhiteSpace(existingId) && currentItemReferenceData != null && currentItemReferenceData.TryGetValue(existingId, out var currentData))
                     {
-                        bool isPatchRequired = await JsonHelper.IsPatchRequiredAsync(currentData, json, null, null, logger, company);
+                        fieldToUpdate = await JsonHelper.IsPatchRequiredAsync(currentData, json, excludedFields, null, logger, company) ?? string.Empty;
+                        bool isPatchRequired = !string.IsNullOrWhiteSpace(fieldToUpdate);
                         if (!isPatchRequired) continue;
 
                         // Update: PATCH to items({id})
                         string updateUrl = $"{collectionUrl}({existingId})";
 
-                        await BcRequest.PatchBcDataAsync(client, updateUrl, json, etag ?? "*",
+                        json = await JsonHelper.RemoveFieldsFromJsonAsync(json, excludedFields, logger, company);
+
+                        await BcRequest.PatchBcDataAsync(client, updateUrl, getUrl, "no", json, etag ?? "*",
                             $"Item reference {itemNo} {referenceType} {referenceTypeNo} updated successfully.", $"Failed to update item reference {itemNo} {referenceType} {referenceTypeNo}. Json: {json}", EventLog.GetMethodName(), logger, company, authHelper, cancellationToken);
 
                         var itemTempResult = await ItemBCRequest.GetItemsAsync(client, config, company, $"no eq '{itemNo.Replace("'", "''")}'", "", logger, authHelper, cancellationToken);
@@ -167,7 +172,7 @@ public static class ItemReferencesBCRequest
                     {
                         string postUrl = collectionUrl;
 
-                        await BcRequest.PostBcDataAsync(client, postUrl, json, $"Item reference {itemNo} {referenceType} {referenceTypeNo} created successfully.", $"Failed to create item reference {itemNo} {referenceType} {referenceTypeNo}. Json: {json}", EventLog.GetMethodName(), logger, company, authHelper, cancellationToken);
+                        await BcRequest.PostBcDataAsync(client, postUrl, json, $"Item reference {itemNo} {referenceType} {referenceTypeNo} created successfully.", $"Failed to create item reference {itemNo} {referenceType} {referenceTypeNo}. Json: {json}", EventLog.GetMethodName(), "", logger, company, authHelper, cancellationToken);
 
                         var itemTempResult = await ItemBCRequest.GetItemsAsync(client, config, company, $"no eq '{itemNo.Replace("'", "''")}'", "", logger, authHelper, cancellationToken);
 
@@ -274,7 +279,7 @@ public static class ItemReferencesBCRequest
                     string postUrl = $"{postUomUrl}";
 
                     await BcRequest.PostBcDataAsync(client, postUrl, postUomJson,
-                         $"Item Uom {itemNumber} {bcUom} create successfully.", $"Failed to create item uom {itemNumber} {bcUom}. Json: {postUomJson}", EventLog.GetMethodName(), logger, company, authHelper, cancellationToken);
+                         $"Item Uom {itemNumber} {bcUom} create successfully.", $"Failed to create item uom {itemNumber} {bcUom}. Json: {postUomJson}", EventLog.GetMethodName(), "", logger, company, authHelper, cancellationToken);
                 }
                 catch (Exception)
                 {

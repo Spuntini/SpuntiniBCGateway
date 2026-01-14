@@ -33,15 +33,15 @@ public static class ItemUnitOfMeasureBCRequest
 
             Dictionary<string, string>? itemResult = [];
 
+            string escaped = itemNo.Replace("'", "''");
+            string filter = $"no eq '{escaped}'";
+
+            string getUrl = config[$"Companies:{company}:ItemData:DestinationApiUrl"] + "?$filter=" + filter + "&$expand=defaultDimensions,itemUnitOfMeasures";
+
             if (!allItemData.TryGetValue(itemNo, out itemResult) || itemResult is null)
             {
-                string escaped = itemNo.Replace("'", "''");
-                string filter = $"no eq '{escaped}'";
-
-                string itemUrl = config[$"Companies:{company}:ItemData:DestinationApiUrl"] + "?$filter=" + filter + "&$expand=defaultDimensions,itemUnitOfMeasures";
                 // POSSIBLY NEW ITEM
-
-                itemResult = (await BcRequest.GetBcDataAsync(client, itemUrl, "no", EventLog.GetMethodName(), logger, company, authHelper, cancellationToken)).FirstOrDefault().Value;
+                itemResult = (await BcRequest.GetBcDataAsync(client, getUrl, "no", EventLog.GetMethodName(), logger, company, authHelper, cancellationToken)).FirstOrDefault().Value;
                 allItemData[itemNo] = itemResult;
             }
 
@@ -171,7 +171,8 @@ public static class ItemUnitOfMeasureBCRequest
 
                         string json = JsonSerializer.Serialize(uom, new JsonSerializerOptions { WriteIndented = false });
 
-                        await BcRequest.PatchBcDataAsync(client, updateUrl, json, etag ?? "*",
+                        getUrl = collectionUrl + "?$filter=" + Uri.EscapeDataString($"systemId eq '{existingId.Replace("'", "''")}'");
+                        await BcRequest.PatchBcDataAsync(client, updateUrl, getUrl, "systemId", json, etag ?? "*",
                         $"Item uom {itemNo} {code} updated successfully.", $"Failed to update item uom {itemNo} {code}. Json: {itemJson}", EventLog.GetMethodName(), logger, company, authHelper, cancellationToken);
 
                         updateItem = true;
@@ -217,7 +218,7 @@ public static class ItemUnitOfMeasureBCRequest
                             string postUrl = $"{collectionUrl}";
 
                             await BcRequest.PostBcDataAsync(client, postUrl, postUomJson,
-                                 $"Item Uom {itemNo} {code} create successfully.", $"Failed to create item uom {itemNo} {code}. Json: {postUomJson}", EventLog.GetMethodName(), logger, company, authHelper, cancellationToken);
+                                 $"Item Uom {itemNo} {code} create successfully.", $"Failed to create item uom {itemNo} {code}. Json: {postUomJson}", EventLog.GetMethodName(), "", logger, company, authHelper, cancellationToken);
 
                             updateItem = true;
                         }
@@ -232,7 +233,7 @@ public static class ItemUnitOfMeasureBCRequest
 
             if (updateItem)
             {
-                var itemTempResult = await ItemBCRequest.GetItemsAsync(client, config, company, $"no eq '{itemNo.Replace("'", "''")}'", null, logger, authHelper, cancellationToken);
+                var itemTempResult = await ItemBCRequest.GetItemsAsync(client, config, company, $"no eq '{itemNo.Replace("'", "''")}'", "", logger, authHelper, cancellationToken);
 
                 allItemData ??= [];
                 if (!string.IsNullOrWhiteSpace(itemNo) && itemTempResult != null && itemTempResult.TryGetValue(itemNo, out _))
@@ -335,7 +336,7 @@ public static class ItemUnitOfMeasureBCRequest
                     string postUrl = $"{postUomUrl}";
 
                     await BcRequest.PostBcDataAsync(client, postUrl, postUomJson,
-                         $"Item Uom {itemNumber} {bcUom} create successfully.", $"Failed to create item uom {itemNumber} {bcUom}. Json: {postUomJson}", EventLog.GetMethodName(), logger, company, authHelper, cancellationToken);
+                         $"Item Uom {itemNumber} {bcUom} create successfully.", $"Failed to create item uom {itemNumber} {bcUom}. Json: {postUomJson}", EventLog.GetMethodName(), "", logger, company, authHelper, cancellationToken);
                 }
                 catch (Exception)
                 {

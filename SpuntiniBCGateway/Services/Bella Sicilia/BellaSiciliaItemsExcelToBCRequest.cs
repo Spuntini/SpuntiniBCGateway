@@ -15,6 +15,15 @@ public static partial class BellaSiciliaItemsExcelToBCRequest
         return await ItemBCRequest.GetItemsAsync(client, config, company, filter, expand, logger, authHelper, cancellationToken);
     }
 
+    public static async Task<HttpResponseMessage?> GetItemListAsync(HttpClient client, IConfigurationRoot config, string? company = null, List<string>? itemNumberList = null, EventLog? logger = null, AuthHelper? authHelper = null, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(company) || !company.StartsWith("BELLA", StringComparison.OrdinalIgnoreCase))
+            ArgumentException.ThrowIfNullOrEmpty(company, "This method is only for company 'BELLA SICILIA'");
+
+        string json = ConvertExcelToItemJson(config, company, itemNumberList, logger).First();
+        return await ItemBCRequest.UpsertItemAsync(client, config, company, json, null, logger, authHelper, cancellationToken);
+    }
+
     public static async Task<HttpResponseMessage?> GetItemAsync(HttpClient client, IConfigurationRoot config, string? company = null, List<string>? itemNumberList = null, EventLog? logger = null, AuthHelper? authHelper = null, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(company) || !company.StartsWith("BELLA", StringComparison.OrdinalIgnoreCase))

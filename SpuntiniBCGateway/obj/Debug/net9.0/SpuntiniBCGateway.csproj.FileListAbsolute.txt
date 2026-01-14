@@ -95,3 +95,4 @@ C:\Users\lode.vanderstichele\Spuntini BVBA\Spuntinigroup - IT - Documenten\Proje
 C:\Users\lode.vanderstichele\Spuntini BVBA\Spuntinigroup - IT - Documenten\Project\SpuntiniBCGateway\SpuntiniBCGateway\bin\Debug\net9.0\XLParser.dll
 C:\Users\lode.vanderstichele\Spuntini BVBA\Spuntinigroup - IT - Documenten\Project\SpuntiniBCGateway\SpuntiniBCGateway\bin\Debug\net9.0\gateway-schedule.json
 C:\Users\lode.vanderstichele\Spuntini BVBA\Spuntinigroup - IT - Documenten\Project\SpuntiniBCGateway\SpuntiniBCGateway\obj\Debug\net9.0\SpuntiniBCGateway.sourcelink.json
+C:\Users\lode.vanderstichele\Spuntini BVBA\Spuntinigroup - IT - Documenten\Project\SpuntiniBCGateway\SpuntiniBCGateway\bin\Debug\net9.0\auth.json

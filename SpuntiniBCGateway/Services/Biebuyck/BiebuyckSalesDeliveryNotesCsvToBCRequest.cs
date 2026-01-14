@@ -272,8 +272,8 @@ public static class BiebuyckSalesDeliveryNotesCsvToBCRequest
                         { "blocked", "" }
                     });
 
-                await BcRequest.PatchBcDataAsync(httpClient, $"{customerUrl}({existingId})", patchJson, etag ?? "*",
-                $"Customer {customerNumber} deblocked successfully.", $"Failed to deblock customer {customerNumber}. Json: {patchJson}", EventLog.GetMethodName(), logger, company, authHelper, cancellationToken);
+                await BcRequest.PatchBcDataAsync(httpClient, patchUrl: $"{customerUrl}({existingId})", getUrl: $"{customerUrl}?$filter=no eq '{customerNumber.Replace("'", "''")}'", keyValue: "no", json: patchJson, etag: etag ?? "*",
+                succesMessage: $"Customer {customerNumber} deblocked successfully.", errorMessage: $"Failed to deblock customer {customerNumber}. Json: {patchJson}", sourceMethod: EventLog.GetMethodName(), logger: logger, company: company, authHelper: authHelper, cancellationToken: cancellationToken);
 
                 customerData["blocked"] = "";
             }

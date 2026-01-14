@@ -63,7 +63,7 @@ public static class SalesOrderBCRequest
 
                 // CREATE SALES ORDER
                 var responseMessage = await BcRequest.PostBcDataAsync(client, createUrl + "?$expand=salesOrderLines", salesOrderJson,
-                $"Sales Order {docNum} - {date} created successfully.", $"Failed to create sales order {docNum}. Json: {salesOrderJson}", EventLog.GetMethodName(), logger, company, authHelper, cancellationToken);
+                $"Sales Order {docNum} - {date} created successfully.", $"Failed to create sales order {docNum}. Json: {salesOrderJson}", EventLog.GetMethodName(), "", logger, company, authHelper, cancellationToken);
 
                 if (!responseMessage.IsSuccessStatusCode)
                     return responseMessage;
@@ -136,13 +136,16 @@ public static class SalesOrderBCRequest
             actionUrl = actionUrl.Replace("{salesOrderId}", salesOrder);
 
             return await BcRequest.PostBcDataAsync(client, actionUrl, "",
-                $"Sales Order {salesOrder} {action} successfully.", $"Failed to {action} sales order {salesOrder}.", EventLog.GetMethodName(), logger, company, authHelper, cancellationToken);
+                $"Sales Order {salesOrder} {action} successfully.", $"Failed to {action} sales order {salesOrder}.", EventLog.GetMethodName(), "", logger, company, authHelper, cancellationToken);
         }
         catch (Exception ex)
         {
             if (logger != null) await logger.ErrorAsync(MethodBase.GetCurrentMethod()?.Name, company, ex);
 
-            throw;
+            return new HttpResponseMessage(System.Net.HttpStatusCode.InternalServerError)
+            {
+                ReasonPhrase = ex.Message
+            };
         }
     }
 }

@@ -257,11 +257,18 @@ public static class PeppolUblReader
 
     private static PeppolDocumentLine ParseDocumentLine(XElement lineElement)
     {
+        // Handle both InvoiceLine (InvoicedQuantity) and CreditNoteLine (CreditedQuantity)
+        var quantityValue = GetElementValue(lineElement, [CbcNs + "InvoicedQuantity"]) 
+            ?? GetElementValue(lineElement, [CbcNs + "CreditedQuantity"]);
+        
+        var quantityElement = lineElement.Element(CbcNs + "InvoicedQuantity") 
+            ?? lineElement.Element(CbcNs + "CreditedQuantity");
+
         var line = new PeppolDocumentLine
         {
             LineId = GetElementValue(lineElement, [CbcNs + "ID"]) ?? string.Empty,
-            Quantity = ParseDecimal(GetElementValue(lineElement, [CbcNs + "InvoicedQuantity"])),
-            UnitCode = lineElement.Element(CbcNs + "InvoicedQuantity")?.Attribute("unitCode")?.Value ?? string.Empty,
+            Quantity = ParseDecimal(quantityValue),
+            UnitCode = quantityElement?.Attribute("unitCode")?.Value ?? string.Empty,
             LineExtensionAmount = ParseDecimal(GetElementValue(lineElement, [CbcNs + "LineExtensionAmount"])),
             AccountingCostCode = GetElementValue(lineElement, [CbcNs + "AccountingCostCode"]) ?? string.Empty
         };
@@ -291,7 +298,9 @@ public static class PeppolUblReader
         var priceElement = lineElement.Element(CacNs + "Price");
         if (priceElement != null)
         {
-            line.UnitPrice = ParseDecimal(GetElementValue(priceElement, [CbcNs + "PriceAmount"]));
+            var priceAmount = ParseDecimal(GetElementValue(priceElement, [CbcNs + "PriceAmount"]));
+            // The price amount in Peppol is the line total, so divide by quantity to get unit price
+            line.UnitPrice = line.Quantity > 0 ? priceAmount / line.Quantity : priceAmount;
         }
 
         return line;

@@ -90,6 +90,7 @@ public static class BellaSiciliaPurchaseInvoiceToBcRequest
         for (int lineIndex = 0; lineIndex < peppolDocument.DocumentLines.Count; lineIndex++)
         {
             var peppolLine = peppolDocument.DocumentLines[lineIndex];
+            
             var lineObject = new Dictionary<string, object>
             {
                // { "lineNumber", (lineIndex + 1) * 10000 },

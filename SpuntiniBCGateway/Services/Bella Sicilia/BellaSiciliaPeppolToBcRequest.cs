@@ -53,10 +53,7 @@ public static class BellaSiciliaPeppolToBcRequest
                 // Determine the document type and process accordingly
                 var processedFile = await ProcessPeppolDocumentAsync(client, config, mode, company, peppolDocument, documentNumberList, allItemData, allCustomerData, unitOfMeasuresDictionary, logger, authHelper, cancellationToken);
 
-                // Move file to success directory if processed, else leave it where it is
-                if (!processedFile) continue;
-
-                await MoveFileToDestinationAsync(peppolFile, config, company, true, logger);
+                await MoveFileToDestinationAsync(peppolFile, config, company, processedFile, logger);
                 processedCount++;
             }
             catch (Exception ex)
@@ -93,32 +90,33 @@ public static class BellaSiciliaPeppolToBcRequest
             case PeppolDocumentType.VendorInvoice:
                 // if (mode == "purchase" || mode == "allpurchase" || mode == "all")
                 // {
-                //     await BellaSiciliaPurchaseInvoiceToBcRequest.ProcessPeppolInvoiceAsync(client, config, company, peppolDocument, logger, authHelper, cancellationToken);
-                //     return true;
+                //     var response =await BellaSiciliaPurchaseInvoiceToBcRequest.ProcessPeppolInvoiceAsync(client, config, company, peppolDocument, logger, authHelper, cancellationToken);
+                //     return (response != null && response.IsSuccessStatusCode);
                 // }
                 break;
 
             case PeppolDocumentType.VendorCreditNote:
                 // if (mode == "purchase" || mode == "allpurchase" || mode == "all")
                 // {
-                //     await BellaSiciliaPurchaseCreditNoteToBcRequest.ProcessPeppolCreditNoteAsync(client, config, company, peppolDocument, logger, authHelper, cancellationToken);
-                //     return true;
+                //     var response =await BellaSiciliaPurchaseCreditNoteToBcRequest.ProcessPeppolCreditNoteAsync(client, config, company, peppolDocument, logger, authHelper, cancellationToken);
+                //     return (response != null && response.IsSuccessStatusCode);
                 // }
                 break;
 
             case PeppolDocumentType.ClientInvoice:
                 if (mode == "allsales" || mode == "sales" || mode == "all")
                 {
-                    await BellaSiciliaSalesInvoiceToBcRequest.ProcessPeppolInvoiceAsync(client, config, company, peppolDocument, allItemData, allCustomerData, unitOfMeasuresDictionary, logger, authHelper, cancellationToken);
-                    return true;
+                    var response = await BellaSiciliaSalesInvoiceToBcRequest.ProcessPeppolInvoiceAsync(client, config, company, peppolDocument, allItemData, allCustomerData, unitOfMeasuresDictionary, logger, authHelper, cancellationToken);
+                    
+                   return response != null && response.IsSuccessStatusCode;
                 }
                 break;
 
             case PeppolDocumentType.ClientCreditNote:
                 if (mode == "allsales" || mode == "sales" || mode == "all")
                 {
-                    await BellaSiciliaSalesCreditNoteToBcRequest.ProcessPeppolCreditNoteAsync(client, config, company, peppolDocument, allItemData, allCustomerData, unitOfMeasuresDictionary, logger, authHelper, cancellationToken);
-                    return true;
+                    var response = await BellaSiciliaSalesCreditNoteToBcRequest.ProcessPeppolCreditNoteAsync(client, config, company, peppolDocument, allItemData, allCustomerData, unitOfMeasuresDictionary, logger, authHelper, cancellationToken);
+                    return response != null && response.IsSuccessStatusCode;
                 }
 
                 break;

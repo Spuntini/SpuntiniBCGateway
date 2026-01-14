@@ -79,7 +79,7 @@ public partial class BellaSiciliaHelper
         return uom.ToUpperInvariant() switch
         {
             "STUKS" or "PCE" or "PC" => 1,
-            "KG" or "L" or "LITER" => 100,
+            "STUK" or "KG" or "L" or "LITER" => 100,
             "GR" => 1000,
             "KARTON" => -1,
             _ => 1,
@@ -92,7 +92,7 @@ public partial class BellaSiciliaHelper
 
         return uom.ToUpperInvariant() switch
         {
-            "STUKS" => 1,
+            "STUKS" or "PCE" or "PC" => 1,
             _ => 0,
         };
     }
@@ -105,7 +105,7 @@ public partial class BellaSiciliaHelper
             return null;
 
         // Try parsing DD-MM-YYYY format (common in Dutch systems)
-        if (DateTime.TryParseExact(dateStr, "dd-MM-yyyy", System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var dt))
+        if (DateTime.TryParseExact(dateStr, "dd-MM-yyyy", CultureInfo.InvariantCulture, DateTimeStyles.None, out var dt))
             return dt;
 
         // Try other common formats
@@ -121,7 +121,7 @@ public partial class BellaSiciliaHelper
             return null;
 
         // Try parsing DD-MM-YYYY format (common in Dutch systems)
-        if (DateTime.TryParseExact(dateStr, "dd-MM-yyyy", System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var dt))
+        if (DateTime.TryParseExact(dateStr, "dd-MM-yyyy", CultureInfo.InvariantCulture, DateTimeStyles.None, out var dt))
             return dt.ToString("yyyy-MM-dd");
 
         // Try other common formats

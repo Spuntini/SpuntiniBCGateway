@@ -51,11 +51,11 @@ public static class PriceListLinesBCRequest
 
                 Dictionary<string, string>? result = [];
                 bool isPatchRequired = false;
-
+                string getUrl = collectionUrl + "?$select=systemId&$filter=" + filter;
+                string[]? excludedFields = config.GetSection($"Companies:{company}:DimensionData:ExcludedFieldsForPatch").Get<string[]>();
+                string fieldToUpdate = string.Empty;
                 if (!string.IsNullOrWhiteSpace(filter))
                 {
-                    string getUrl = collectionUrl + "?$select=systemId&$filter=" + filter;
-
                     result = (await BcRequest.GetBcDataAsync(client, getUrl, "no", EventLog.GetMethodName(), logger, company, authHelper, cancellationToken)).FirstOrDefault().Value;
 
                     if (result != null)
@@ -67,7 +67,8 @@ public static class PriceListLinesBCRequest
                     if (!string.IsNullOrWhiteSpace(existingId))
                     {
                         // Check if PATCH is required by comparing fields
-                        isPatchRequired = await JsonHelper.IsPatchRequiredAsync(result, json, ["skipDuplicateCheck"], null, logger, company);
+                        fieldToUpdate = await JsonHelper.IsPatchRequiredAsync(result, json, excludedFields, null, logger, company) ?? string.Empty;
+                        isPatchRequired = !string.IsNullOrWhiteSpace(fieldToUpdate);
                     }
                 }
 
@@ -79,11 +80,9 @@ public static class PriceListLinesBCRequest
                         string updateUrl = $"{collectionUrl}({existingId})";
 
                         // Remove excluded fields from JSON before PATCH
-                        string[]? excludedFields = config.GetSection($"Companies:{company}:DimensionData:ExcludedFieldsForPatch").Get<string[]>();
-
                         json = await JsonHelper.RemoveFieldsFromJsonAsync(json, excludedFields, logger, company);
 
-                        return await BcRequest.PatchBcDataAsync(client, updateUrl, json, etag ?? "*",
+                        return await BcRequest.PatchBcDataAsync(client, updateUrl, getUrl, "no", json, etag ?? "*",
                         $"Item {no} updated successfully.", $"Failed to update item {no}. Json: {json}", EventLog.GetMethodName(), logger, company, authHelper, cancellationToken);
                     }
 
@@ -97,7 +96,7 @@ public static class PriceListLinesBCRequest
                 else
                 {
                     return await BcRequest.PostBcDataAsync(client, collectionUrl, json,
-                    $"Item {no} created successfully.", $"Failed to create item {no}. Json: {json}", EventLog.GetMethodName(), logger, company, authHelper, cancellationToken);
+                    $"Item {no} created successfully.", $"Failed to create item {no}. Json: {json}", EventLog.GetMethodName(), "", logger, company, authHelper, cancellationToken);
                 }
             }
 
@@ -179,16 +178,16 @@ public static class PriceListLinesBCRequest
 
                     if (string.IsNullOrWhiteSpace(existingId))
                     {
-                        if (logger != null) await logger.InfoAsync(EventLog.GetMethodName(), company, "Delete not possible, price list line not found");                
+                        if (logger != null) await logger.InfoAsync(EventLog.GetMethodName(), company, "Delete not possible, price list line not found");
                         return null;
                     }
                 }
 
                 return await BcRequest.DeleteBcDataAsync(client, collectionUrl, json, etag ?? "*",
-                        $"Price list line deleted successfully.", $"Failed to delete pricelist line. Json: {json}", EventLog.GetMethodName(), logger, company, authHelper, cancellationToken);                     
-            }   
+                        $"Price list line deleted successfully.", $"Failed to delete pricelist line. Json: {json}", EventLog.GetMethodName(), logger, company, authHelper, cancellationToken);
+            }
 
-            return null;             
+            return null;
         }
         catch (Exception ex)
         {

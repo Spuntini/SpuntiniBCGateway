@@ -91,6 +91,8 @@ public static class ItemBCRequest
 
             string getUrl = collectionUrl + "?$filter=" + Uri.EscapeDataString(filter) + (useDefaultDimensions ? "&$expand=defaultDimensions,itemUnitOfMeasures,itemReferences" : "&$expand=itemUnitOfMeasures,itemReferences");
 
+            string[]? excludedFields = config.GetSection($"Companies:{company}:ItemData:FieldsToExcludeFromUpdate").Get<string[]>();
+string fieldToUpdate = string.Empty;
             if (allItemData == null || string.IsNullOrWhiteSpace(no) || !allItemData.TryGetValue(no, out itemResult))
             {
                 itemResult = (await BcRequest.GetBcDataAsync(client, getUrl, "no", EventLog.GetMethodName(), logger, company, authHelper, cancellationToken)).FirstOrDefault().Value;
@@ -98,7 +100,7 @@ public static class ItemBCRequest
                 if (allItemData != null && !string.IsNullOrWhiteSpace(no) && itemResult != null)
                 {
                     allItemData ??= [];
-                    allItemData[no] = itemResult;                    
+                    allItemData[no] = itemResult;
                 }
             }
 
@@ -127,8 +129,8 @@ public static class ItemBCRequest
                 }
 
                 // Check if PATCH is required by comparing fields
-                isPatchRequired = await JsonHelper.IsPatchRequiredAsync(itemResult, itemJson, ["skipDuplicateCheck", "defaultDimensions", "itemReferences", "itemUnitOfMeasures"],
-                    new Dictionary<string, List<string>> { { "showInCompany", new List<string> { "SPBI", "SPBS" } } }, logger, company);
+                fieldToUpdate = await JsonHelper.IsPatchRequiredAsync(itemResult, itemJson, excludedFields, new Dictionary<string, List<string>> { { "showInCompany", new List<string> { "SPBI", "SPBS" } } }, logger, company) ?? string.Empty;
+                isPatchRequired = !string.IsNullOrWhiteSpace(fieldToUpdate);
             }
 
             root.TryGetProperty("itemUnitOfMeasures", out var itemUnitOfMeasures);
@@ -155,12 +157,12 @@ public static class ItemBCRequest
                         tempJson = JsonHelper.ReplacePathValues(tempJson, new Dictionary<string, object>() { { "tradeUnitOfMeasure", "STUKS" } }, false);
                     }
 
-                    result = await BcRequest.PostBcDataAsync(client, postUrl, tempJson, $"Item {no} created successfully.", $"Failed to create item {no}. Json: {tempJson}", EventLog.GetMethodName(), logger, company, authHelper, cancellationToken);
+                    result = await BcRequest.PostBcDataAsync(client, postUrl, tempJson, $"Item {no} created successfully.", $"Failed to create item {no}. Json: {tempJson}", EventLog.GetMethodName(), "", logger, company, authHelper, cancellationToken);
                     update = true;
                 }
                 else
                 {
-                    result = await BcRequest.PostBcDataAsync(client, postUrl, itemJson, $"Item {no} created successfully.", $"Failed to create item {no}. Json: {itemJson}", EventLog.GetMethodName(), logger, company, authHelper, cancellationToken);
+                    result = await BcRequest.PostBcDataAsync(client, postUrl, itemJson, $"Item {no} created successfully.", $"Failed to create item {no}. Json: {itemJson}", EventLog.GetMethodName(), "", logger, company, authHelper, cancellationToken);
                 }
 
                 if (!update)
@@ -172,7 +174,7 @@ public static class ItemBCRequest
                     ArgumentNullException.ThrowIfNull(itemResult, $"Failed to retrieve item {no} after creation.");
 
                 allItemData ??= [];
-                
+
                 if (allItemData != null && !string.IsNullOrWhiteSpace(no))
                     allItemData[no] = itemResult;
 
@@ -220,11 +222,9 @@ public static class ItemBCRequest
                 string updateUrl = $"{collectionUrl}({existingId})";
 
                 // Remove excluded fields from JSON before PATCH
-                string[]? excludedFields = config.GetSection($"Companies:{company}:ItemData:FieldsToExcludeFromUpdate").Get<string[]>();
-
                 itemJson = await JsonHelper.RemoveFieldsFromJsonAsync(itemJson, excludedFields, logger, company);
 
-                await BcRequest.PatchBcDataAsync(client, updateUrl, itemJson, etag ?? "*",
+                await BcRequest.PatchBcDataAsync(client, updateUrl, getUrl, "no", itemJson, etag ?? "*",
                  $"Item {no} updated successfully.", $"Failed to update item {no}. 1 Json: {itemJson}", EventLog.GetMethodName(), logger, company, authHelper, cancellationToken);
 
                 itemResult = (await BcRequest.GetBcDataAsync(client, getUrl, "no", EventLog.GetMethodName(), logger, company, authHelper, cancellationToken)).FirstOrDefault().Value;

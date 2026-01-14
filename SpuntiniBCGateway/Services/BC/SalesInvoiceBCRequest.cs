@@ -64,10 +64,10 @@ public static class SalesInvoiceBCRequest
 
                 // CREATE SALES INVOICE
                 var responseMessage = await BcRequest.PostBcDataAsync(client, collectionUrl + "?$expand=salesLines", salesInvoiceJson,
-                $"Sales invoice {docNum} - {date} created successfully.", $"Failed to create sales invoice {docNum}. Json: {salesInvoiceJson}", EventLog.GetMethodName(), logger, company, authHelper, cancellationToken);
+                $"Sales invoice {docNum} - {date} created successfully.", $"Failed to create sales invoice {docNum}. Json: {salesInvoiceJson}", EventLog.GetMethodName(), "", logger, company, authHelper, cancellationToken);
 
                 if (!responseMessage.IsSuccessStatusCode)
-                    return new HttpResponseMessage(System.Net.HttpStatusCode.OK);
+                    throw new ArgumentException($"Failed to create sales invoice {docNum}. Status code: {responseMessage.StatusCode}");
 
                 orderResult = (await BcRequest.GetBcDataAsync(client, getUrl, "no", EventLog.GetMethodName(), logger, company, authHelper, cancellationToken)).FirstOrDefault().Value ?? throw new ArgumentException($"Sales invoice {docNum} not found after creation");
 
@@ -78,16 +78,26 @@ public static class SalesInvoiceBCRequest
             if (orderResult == null)
                 throw new ArgumentException($"Sales invoice {docNum} - {date} not found after creation/update");
 
-            if (attachment != null && !string.IsNullOrWhiteSpace(documentAttachments))
+            if (attachment != null)
             {
                 List<JsonElement>? attachmentList = JsonHelper.GetItemsSafe(documentAttachments ?? "[]");
                 if (attachmentList == null || attachmentList.Count <= 0)
                 {
-                    string attachmentUrl = config[$"Companies:{company}:SalesInvoiceData:Actions:DocumentAttachments"] ?? throw new ArgumentException($"Companies:{company}:SalesInvoiceData:Actions:DocumentAttachments");
-                    attachmentUrl = attachmentUrl.Replace("{salesInvoiceId}", existingId);
+                    var documentAttachmentsData = new Dictionary<string, object>() {
+                       { "parentId", existingId ?? ""},
+                       { "fileName", attachment.FileName },
+                       { "parentType", "Sales Invoice" }
+                    };
 
-                    await BcRequest.AttachFile(client, attachment, attachmentUrl, $"Attachment to invoice {docNum} - {date} added successfully.", $"Failed to add attachment to sales invoice {docNum}.",
-                        EventLog.GetMethodName(), logger, company, authHelper, cancellationToken);
+                    var documentAttachmentJson = JsonSerializer.Serialize(documentAttachmentsData, new JsonSerializerOptions
+                    {
+                        WriteIndented = false,
+                        Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+                    });
+
+                    var response = await DocumentAttachmentsBCRequest.UpsertDocumentAttachmentsAsync(client, config, company, documentAttachmentJson, attachment, logger, authHelper, cancellationToken);
+                    if (response == null || !response.IsSuccessStatusCode)
+                        throw new ArgumentException($"Failed to upsert document attachment for sales invoice {docNum}. Status code: {response?.StatusCode}");
 
                     orderResult = (await BcRequest.GetBcDataAsync(client, getUrl, "no", EventLog.GetMethodName(), logger, company, authHelper, cancellationToken)).FirstOrDefault().Value ?? throw new ArgumentException($"Sales invoice {docNum} not found after creation");
 
@@ -109,7 +119,10 @@ public static class SalesInvoiceBCRequest
         {
             if (logger != null) await logger.ErrorAsync(MethodBase.GetCurrentMethod()?.Name, company, ex);
 
-            throw;
+            return new HttpResponseMessage(System.Net.HttpStatusCode.InternalServerError)
+            {
+                ReasonPhrase = ex.Message
+            };
         }
     }
 
@@ -151,14 +164,22 @@ public static class SalesInvoiceBCRequest
 
             actionUrl = actionUrl.Replace("{salesInvoiceId}", salesInvoice);
 
-            return await BcRequest.PostBcDataAsync(client, actionUrl, "",
-                $"Sales invoice {salesInvoice} {action} successfully.", $"Failed to {action} sales invoice {salesInvoice}.", EventLog.GetMethodName(), logger, company, authHelper, cancellationToken);
+            var response = await BcRequest.PostBcDataAsync(client, actionUrl, "",
+                $"Sales invoice {salesInvoice} {action} successfully.", $"Failed to {action} sales invoice {salesInvoice}.", EventLog.GetMethodName(), "", logger, company, authHelper, cancellationToken);
+
+            if (response == null || !response.IsSuccessStatusCode)
+                throw new ArgumentException($"Failed to {action} sales invoice {salesInvoice}. Status code: {response?.StatusCode}");
+
+            return response;
         }
         catch (Exception ex)
         {
             if (logger != null) await logger.ErrorAsync(MethodBase.GetCurrentMethod()?.Name, company, ex);
 
-            throw;
+            return new HttpResponseMessage(System.Net.HttpStatusCode.InternalServerError)
+            {
+                ReasonPhrase = ex.Message
+            };
         }
     }
 }
