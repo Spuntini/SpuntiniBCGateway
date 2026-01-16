@@ -4,6 +4,8 @@ VisualStudioVersion = 17.5.2.0
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SpuntiniBCGateway", "SpuntiniBCGateway\SpuntiniBCGateway.csproj", "{B1BC4500-C0EA-42E9-871A-DFF765AF140C}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PeppolPdfExtractor", "PeppolPdfExtractor\PeppolPdfExtractor.csproj", "{C2CD5611-D1FB-43FA-892B-EEG876BF251D}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -17,6 +19,12 @@ Global
 		{B1BC4500-C0EA-42E9-871A-DFF765AF140C}.Test|Any CPU.Build.0 = Test|Any CPU
 		{B1BC4500-C0EA-42E9-871A-DFF765AF140C}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{B1BC4500-C0EA-42E9-871A-DFF765AF140C}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C2CD5611-D1FB-43FA-892B-EEG876BF251D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C2CD5611-D1FB-43FA-892B-EEG876BF251D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C2CD5611-D1FB-43FA-892B-EEG876BF251D}.Test|Any CPU.ActiveCfg = Debug|Any CPU
+		{C2CD5611-D1FB-43FA-892B-EEG876BF251D}.Test|Any CPU.Build.0 = Debug|Any CPU
+		{C2CD5611-D1FB-43FA-892B-EEG876BF251D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C2CD5611-D1FB-43FA-892B-EEG876BF251D}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

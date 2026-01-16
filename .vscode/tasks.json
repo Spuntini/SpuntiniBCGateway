@@ -34,6 +34,21 @@
 				"$msCompile"
 			],
 			"group": "build"
+		},
+		{
+			"label": "publish PeppolPdfExtractor (standalone)",
+			"type": "shell",
+			"command": "dotnet publish -c Release -r win-x64 --self-contained --project PeppolPdfExtractor",
+			"args": [],
+			"isBackground": false,
+			"problemMatcher": [
+				"$msCompile"
+			],
+			"group": "build",
+			"presentation": {
+				"reveal": "always",
+				"panel": "shared"
+			}
 		}
 	]
 }

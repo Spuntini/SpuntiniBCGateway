@@ -299,6 +299,102 @@
             Parses an AdditionalDocumentReference element to extract PDF attachment information
             </summary>
         </member>
+        <member name="T:SpuntiniBCGateway.Services.PeppolUblWriter">
+            <summary>
+            Peppol UBL Document writer that transforms PeppolDocument objects to valid Peppol UBL XML files.
+            Supports invoices, credit notes, and other Peppol document types with all required and optional fields.
+            </summary>
+        </member>
+        <member name="M:SpuntiniBCGateway.Services.PeppolUblWriter.WritePeppolDocument(SpuntiniBCGateway.Services.PeppolDocument,System.String)">
+            <summary>
+            Writes a PeppolDocument to a file path, creating a valid Peppol UBL XML document
+            </summary>
+        </member>
+        <member name="M:SpuntiniBCGateway.Services.PeppolUblWriter.WritePeppolDocumentToStream(SpuntiniBCGateway.Services.PeppolDocument,System.IO.Stream)">
+            <summary>
+            Writes a PeppolDocument to a stream, creating a valid Peppol UBL XML document
+            </summary>
+        </member>
+        <member name="M:SpuntiniBCGateway.Services.PeppolUblWriter.WritePeppolDocumentToString(SpuntiniBCGateway.Services.PeppolDocument)">
+            <summary>
+            Converts a PeppolDocument to an XML string representing a valid Peppol UBL document
+            </summary>
+        </member>
+        <member name="M:SpuntiniBCGateway.Services.PeppolUblWriter.CreatePeppolDocument(SpuntiniBCGateway.Services.PeppolDocument)">
+            <summary>
+            Creates the root XML document from a PeppolDocument
+            </summary>
+        </member>
+        <member name="M:SpuntiniBCGateway.Services.PeppolUblWriter.GetElementNameForDocumentType(SpuntiniBCGateway.Services.PeppolDocumentType)">
+            <summary>
+            Gets the element name (Invoice or CreditNote) based on document type
+            </summary>
+        </member>
+        <member name="M:SpuntiniBCGateway.Services.PeppolUblWriter.GetTypeCodeForDocumentType(SpuntiniBCGateway.Services.PeppolDocumentType)">
+            <summary>
+            Gets the type code for the document type
+            </summary>
+        </member>
+        <member name="M:SpuntiniBCGateway.Services.PeppolUblWriter.AddDocumentHeader(System.Xml.Linq.XElement,SpuntiniBCGateway.Services.PeppolDocumentHeader)">
+            <summary>
+            Adds the document header (metadata and party information) to the XML root
+            </summary>
+        </member>
+        <member name="M:SpuntiniBCGateway.Services.PeppolUblWriter.AddPartyInfo(System.Xml.Linq.XElement,SpuntiniBCGateway.Services.PeppolParty)">
+            <summary>
+            Adds party information (supplier or customer) to the parent element
+            </summary>
+        </member>
+        <member name="M:SpuntiniBCGateway.Services.PeppolUblWriter.CreateAddressElement(SpuntiniBCGateway.Services.PeppolAddress)">
+            <summary>
+            Creates an address element from PeppolAddress
+            </summary>
+        </member>
+        <member name="M:SpuntiniBCGateway.Services.PeppolUblWriter.CreateDeliveryElement(SpuntiniBCGateway.Services.PeppolDeliveryInfo)">
+            <summary>
+            Creates a delivery element from PeppolDeliveryInfo
+            </summary>
+        </member>
+        <member name="M:SpuntiniBCGateway.Services.PeppolUblWriter.CreateTaxTotalElement(SpuntiniBCGateway.Services.PeppolTaxTotal,System.String)">
+            <summary>
+            Creates a tax total element from PeppolTaxTotal
+            </summary>
+        </member>
+        <member name="M:SpuntiniBCGateway.Services.PeppolUblWriter.CreateAttachmentElement(SpuntiniBCGateway.Services.Attachment)">
+            <summary>
+            Creates an attachment element from Attachment object
+            </summary>
+        </member>
+        <member name="M:SpuntiniBCGateway.Services.PeppolUblWriter.AddDocumentLines(System.Xml.Linq.XElement,SpuntiniBCGateway.Services.PeppolDocumentType,System.Collections.Generic.List{SpuntiniBCGateway.Services.PeppolDocumentLine})">
+            <summary>
+            Adds document lines (invoice lines or credit note lines) to the root element
+            </summary>
+        </member>
+        <member name="M:SpuntiniBCGateway.Services.PeppolUblWriter.AddElement(System.Xml.Linq.XElement,System.Xml.Linq.XName,System.String)">
+            <summary>
+            Adds an element with text content to a parent element
+            </summary>
+        </member>
+        <member name="M:SpuntiniBCGateway.Services.PeppolUblWriter.AddElement(System.Xml.Linq.XElement,System.Xml.Linq.XName,System.String,System.String)">
+            <summary>
+            Adds an element with text content and a currency attribute to a parent element
+            </summary>
+        </member>
+        <member name="M:SpuntiniBCGateway.Services.PeppolUblWriter.FormatDecimal(System.Decimal)">
+            <summary>
+            Formats a decimal value for XML output using invariant culture
+            </summary>
+        </member>
+        <member name="T:SpuntiniBCGateway.Services.Attachment">
+            <summary>
+            Represents an attachment (e.g., PDF file) to be embedded in a Peppol document
+            </summary>
+        </member>
+        <member name="M:SpuntiniBCGateway.Services.Attachment.FromFile(System.String)">
+            <summary>
+            Creates an attachment from a file path
+            </summary>
+        </member>
         <member name="M:SpuntiniBCGateway.Services.VatSanitizer.Clean(System.String,System.String)">
             <summary>
             Verwijdert alles behalve A-Z en 0-9, forceert uppercase country code als aanwezig.
